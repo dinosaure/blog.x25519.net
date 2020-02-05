@@ -34,11 +34,12 @@ module Make
     Reqd.respond_with_string reqd response contents
 
   let display console store reqd key =
+    log console "Deliver %a." Fpath.pp key >>= fun () ->
     Store.find store (Fpath.segs key) >>= fun contents -> match contents, Fpath.get_ext key with
     | None, _ ->
       respond_404 key reqd ;
-      log console "Unavailable %a ressource." Fpath.pp key
-    | Some contents, "html" ->
+      log console "Unavailable %a resource." Fpath.pp key
+    | Some contents, ".html" ->
       let headers = Headers.of_list
                       [ "content-length", string_of_int (String.length contents)
                       ; "content-type", "text/html"
@@ -46,7 +47,7 @@ module Make
       let response = Response.create ~headers `OK in
       Reqd.respond_with_string reqd response contents ;
       log console "%a (as text/html) delivered!" Fpath.pp key
-    | Some contents, "css" ->
+    | Some contents, ".css" ->
       let headers = Headers.of_list
                       [ "content-length", string_of_int (String.length contents)
                       ; "content-type", "text/css"
@@ -56,7 +57,7 @@ module Make
       log console "%a (as text/css) delivered!" Fpath.pp key
     | Some _, _ ->
       respond_404 key reqd ;
-      log console "Invalid %a ressource." Fpath.pp key
+      log console "Invalid %a resource." Fpath.pp key
 
   let reload console store remote =
     Sync.pull store remote `Set >>= function
@@ -76,12 +77,22 @@ module Make
     let target = Astring.String.cuts ~sep:"/" target in
 
     match target with
-    | [] -> display console store reqd _index
-    | [ "_update" ] -> reload console store remote
-    | _ -> match Fpath.of_string request.Request.target with
-      | Ok key -> display console store reqd key
+    | [ "" ] -> display console store reqd _index
+    | [ "_update" ] ->
+      reload console store remote >>= fun () ->
+      let contents = "Blog updated!" in
+      let headers = Headers.of_list
+                      [ "content-length", string_of_int (String.length contents)
+                      ; "connection", "close" ] in
+      let response = Response.create ~headers `OK in
+      Reqd.respond_with_string reqd response contents ;
+      Lwt.return ()
+    | _ ->
+      let target = Astring.String.trim ~drop:(Char.equal '/') request.Request.target in
+      match Fpath.of_string target with
+      | Ok key -> display console store reqd Fpath.(_html // key)
       | Error _ ->
-        log console "Invalid ressource %S." request.Request.target >>= fun () ->
+        log console "Invalid resource %S." request.Request.target >>= fun () ->
         Lwt.fail Not_found
 
   let request_handler console remote store edn reqd =
