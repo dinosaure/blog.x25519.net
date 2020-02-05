@@ -9,8 +9,8 @@ echo $IP_ADDR
 GW=`ip route | grep ^default | awk '{print $3}'`
 echo $GW
 
-solo5-hvt --net:service=tap100 -- pasteur.hvt \
+solo5-hvt --net:service=tap100 -- __blog.hvt \
 	--ipv4=$INET_STR \
 	--ipv4-gateway=$GW \
-	--remote=git://10.0.0.1/pasteur \
+	--remote=git://github.com/dinosaure/blog.x25519.net \
 	--port 80
