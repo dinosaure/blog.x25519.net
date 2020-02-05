@@ -3,8 +3,8 @@
 <channel>
 <title>x25519.net</title>
 <description>x25519.net</description>
-<link>https://blog.x25519.net</link>
-<lastBuildDate>mer., 05 févr. 2020 16:25:53 +0100</lastBuildDate>
+<link>https://blog.x25519.net/</link>
+<lastBuildDate>mer., 05 févr. 2020 18:29:28 +0100</lastBuildDate>
 <item>
   <title>Hello World!</title>
   <description><![CDATA[
@@ -12,7 +12,7 @@
 Hello World!
 </p>
 ]]></description>
-  <link>https://blog.x25519.net2019-08-27--hello-world.html</link>
+  <link>https://blog.x25519.net/2019-08-27--hello-world.html</link>
   <pubDate>mar., 27 août 2019 02:00:00 +0200</pubDate>
 </item>
 </channel>
