@@ -58,11 +58,11 @@ module Make
     | Some contents, ".xml" ->
       let headers = Headers.of_list
                       [ "content-length", string_of_int (String.length contents)
-                      ; "content-type", "application/xml+rss"
+                      ; "content-type", "application/rss+xml"
                       ; "connection", "close" ] in
       let response = Response.create ~headers `OK in
       Reqd.respond_with_string reqd response contents ;
-      log console "%a (as text/css) delivered!" Fpath.pp key
+      log console "%a (as application/rss+xml) delivered!" Fpath.pp key
 
     | Some _, _ ->
       respond_404 key reqd ;
