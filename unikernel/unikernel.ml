@@ -55,6 +55,15 @@ module Make
       let response = Response.create ~headers `OK in
       Reqd.respond_with_string reqd response contents ;
       log console "%a (as text/css) delivered!" Fpath.pp key
+    | Some contents, ".xml" ->
+      let headers = Headers.of_list
+                      [ "content-length", string_of_int (String.length contents)
+                      ; "content-type", "application/xml+rss"
+                      ; "connection", "close" ] in
+      let response = Response.create ~headers `OK in
+      Reqd.respond_with_string reqd response contents ;
+      log console "%a (as text/css) delivered!" Fpath.pp key
+
     | Some _, _ ->
       respond_404 key reqd ;
       log console "Invalid %a resource." Fpath.pp key
