@@ -4,7 +4,7 @@
 <title>x25519.net</title>
 <description>x25519.net</description>
 <link>https://blog.x25519.net/</link>
-<lastBuildDate>jeu., 06 févr. 2020 11:46:12 +0100</lastBuildDate>
+<lastBuildDate>Thu, 06 Feb 2020 12:49:06 +0100</lastBuildDate>
 <item>
   <title>Hello World!</title>
   <description><![CDATA[
@@ -31,9 +31,9 @@ Of course, I'm not an <i>admin-sys</i> and even if I trie to use my work, I susp
 that the way to deploy my unikernels is not the best. But, eh, it's work.
 </p>
 
-<div id="outline-container-orged7b7d8" class="outline-2">
-<h2 id="orged7b7d8">The purpose of this blog</h2>
-<div class="outline-text-2" id="text-orged7b7d8">
+<div id="outline-container-orgb80e4b1" class="outline-2">
+<h2 id="orgb80e4b1">The purpose of this blog</h2>
+<div class="outline-text-2" id="text-orgb80e4b1">
 <p>
 It's hard to follow resources about MirageOS like <i>"how to make an unikernel"</i>
 or <i>"how to plug a data-store"</i>, etc. The MirageOS ecosystem is quite large and
@@ -43,9 +43,9 @@ describe some ways.
 </div>
 </div>
 
-<div id="outline-container-orgb640c3c" class="outline-2">
-<h2 id="orgb640c3c">MirageOS &amp; OCaml</h2>
-<div class="outline-text-2" id="text-orgb640c3c">
+<div id="outline-container-org2e6bde2" class="outline-2">
+<h2 id="org2e6bde2">MirageOS &amp; OCaml</h2>
+<div class="outline-text-2" id="text-org2e6bde2">
 <p>
 Of course, as an OCaml developper, I will talk about OCaml mostly and what we
 currently do with this language and MirageOS.
@@ -53,9 +53,9 @@ currently do with this language and MirageOS.
 </div>
 </div>
 
-<div id="outline-container-orgd9fb5ed" class="outline-2">
-<h2 id="orgd9fb5ed">Some others notes</h2>
-<div class="outline-text-2" id="text-orgd9fb5ed">
+<div id="outline-container-org2c0ea7e" class="outline-2">
+<h2 id="org2c0ea7e">Some others notes</h2>
+<div class="outline-text-2" id="text-org2c0ea7e">
 <p>
 And because it's my blog, I can write what I want. Excuse me for my english, I'm
 french and it can be hard for me to translate all of my mind in english.
@@ -64,7 +64,7 @@ french and it can be hard for me to translate all of my mind in english.
 </div>
 ]]></description>
   <link>https://blog.x25519.net/2020-02-06--hello-world.html</link>
-  <pubDate>jeu., 06 févr. 2020 01:00:00 +0100</pubDate>
+  <pubDate>Thu, 06 Feb 2020 01:00:00 +0100</pubDate>
 </item>
 </channel>
 </rss>

@@ -1,5 +1,5 @@
 #+title: Hello World!
-#+date: <2020-02-06 Thu.>
+#+date: <2020-02-06 Thu>
 
 Hello World! I'm Romain Calascibetta and this is my blog/notes about what I do with
 my computer. It's mostly about MirageOS stuff where I did some work on it and I
