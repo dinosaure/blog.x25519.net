@@ -4,7 +4,388 @@
 <title>x25519.net</title>
 <description>x25519.net</description>
 <link>https://blog.x25519.net/</link>
-<lastBuildDate>Thu, 06 Feb 2020 12:49:06 +0100</lastBuildDate>
+<lastBuildDate>Sun, 09 Feb 2020 13:43:50 +0100</lastBuildDate>
+<item>
+  <title>MirageOS compilation</title>
+  <description><![CDATA[
+</div><div class="post-date"><2020-02-08></div><p>
+MirageOS is not only one software but many libraries and tools which want to
+provide a good <i>user-experience</i> about developing a full operating system. By
+this way, they want to solve many problems with patterns and designs used by the
+core team. However, as I said in my previous article, documentation or materials
+don't really exist about these details.
+</p>
+
+<p>
+So let's start with one about the compilation of an <i>unikernel</i>.
+</p>
+
+<div id="outline-container-orgf9f10c8" class="outline-2">
+<h2 id="orgf9f10c8">Abstraction, interface and <i>functor</i></h2>
+<div class="outline-text-2" id="text-orgf9f10c8">
+<p>
+The biggest goal of MirageOS is to provide a set of <i>interfaces</i>. Go back to the
+OCaml world, we separate two things, the implementation (<code>.ml</code>) and the
+interface (<code>.mli</code>). An implementation can declare lot of things where an interface
+wants to restrict access to some underlying functions/constants/variables.
+</p>
+
+<p>
+The interface can <i>abstract</i> definition of type where, inside (into the
+implementation), the underlying structure is well-known and outside, the ability
+to construct the value must be done by described functions into the <code>.mli</code>.
+</p>
+</div>
+
+<div id="outline-container-orge2b7c4f" class="outline-3">
+<h3 id="orge2b7c4f">A simple module with its interface</h3>
+<div class="outline-text-3" id="text-orge2b7c4f">
+<div class="org-src-container">
+<pre class="src src-ocaml" id="org68b8598"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> string
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">v</span><span class="org-variable-name"> x</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">String.</span>lowercase_ascii x
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">compare</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">String.</span>compare
+</pre>
+</div>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="orga7bc764"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span>
+
+<span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">v</span> <span class="org-tuareg-font-lock-operator">:</span> string <span class="org-tuareg-font-lock-operator">-&gt;</span> t
+<span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">compare</span> <span class="org-tuareg-font-lock-operator">:</span> t <span class="org-tuareg-font-lock-operator">-&gt;</span> t <span class="org-tuareg-font-lock-operator">-&gt;</span> int
+</pre>
+</div>
+
+<p>
+In your example, our <code>type t</code> is a <code>string</code>. However. to make a <code>t</code>, we must use
+<code>v</code> which applies <code>String.lowercase_ascii</code>. Then, we provide the <code>compare</code>
+function to be able to make a <code>Set</code> or a <code>Map</code> of <code>t</code>. On that, we can express a
+simple idea: 
+</p>
+
+<p>
+&gt; a <i>field-name</i> is a <code>string</code> where the comparison of them is case-insensitive, such
+&gt; as <code>Received</code> and <code>received</code> are equivalent.
+</p>
+
+<p>
+Then, for any who wants to use this module, he must use <code>v</code> to <i>create</i> a
+field-name and be able to use it with <code>compare</code>. Generally, we provide a <code>pp</code>
+(Pretty-Printer) to debug, and the couple <code>to_string~/~of_string</code>.
+</p>
+
+<p>
+But the point is to able, by the interface, to restrict the user about what he
+can do and define about what he can rely when he uses such value.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orge8cd67c" class="outline-3">
+<h3 id="orge8cd67c">Trust only on the given interface</h3>
+<div class="outline-text-3" id="text-orge8cd67c">
+<p>
+MirageOS did the choice to trust only on the interface. For us, a <i>device</i>, a
+protocol or a server can be well defined by an interface. This is the purpose of
+`mirage-types` which provides such things.
+</p>
+
+<p>
+The key now is: because for each <i>artifact</i> we have, we use them with their
+interfaces, how to compose them into on a specific computation?
+</p>
+
+<p>
+This is the purpose of MirageOS: a tool to compose implementations (<code>.ml</code>)
+according expected interfaces (<code>.mli</code>) and produce then a operating system (the
+specific computation).
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org018d881" class="outline-2">
+<h2 id="org018d881">A MirageOS project</h2>
+<div class="outline-text-2" id="text-org018d881">
+<p>
+Indeed, the global idea of an <i>unikernel</i> is: develop the main computation of
+your operating system and be able to abstract it over protocols, devices and, at
+the end, <i>targets</i>.
+</p>
+
+<p>
+Let's start to talk about the TCP/IP stack. Usually, on UNIX, we create a
+<code>socket</code> and we use it to receive and send data. Then, the role of your
+operating system is to handle it with your ethernet/wlan card.
+</p>
+
+<p>
+We can abstract the idea of the <code>socket</code> by this interface:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span>
+<span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">error</span>
+
+<span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">recv</span> <span class="org-tuareg-font-lock-operator">:</span> t <span class="org-tuareg-font-lock-operator">-&gt;</span> bytes <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span> <span class="org-tuareg-font-lock-constructor">`Eoi</span> <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">`Data</span> <span class="org-keyword">of</span> int <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span><span class="org-tuareg-font-lock-operator">,</span> error<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> result
+<span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">send</span> <span class="org-tuareg-font-lock-operator">:</span> t <span class="org-tuareg-font-lock-operator">-&gt;</span> string <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>int<span class="org-tuareg-font-lock-operator">,</span> error<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> result
+</pre>
+</div>
+
+<p>
+Then, we can trust over this interface to represent the way to send and receive
+data. Of course, at this stage, we don't know details about implementation - and
+this is what we want.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="orga720e64"><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">Make</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-variable-name">Flow </span><span class="org-tuareg-font-lock-operator">:</span><span class="org-type"> FLOW</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">struct</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">start</span><span class="org-variable-name"> flow</span> <span class="org-tuareg-font-lock-operator">=</span>
+    <span class="org-tuareg-font-lock-module">Flow.</span>send flow <span class="org-string">"Hello World!"</span>
+<span class="org-tuareg-font-lock-governing">end</span>
+</pre>
+</div>
+
+<p>
+The abstraction is done. Now, we have our main computation which can be use with
+something implements our <code>socket</code>. 
+</p>
+
+<p>
+And it comes with another tool, `Functoria` to orchestrate, depending on the
+target, which implementation will be use to apply the final <i>functor</i>. For UNIX,
+we will apply the <i>functor</i> with `mirage-tcpip.stack-socket` and for Solo5/Xen,
+we apply with `mirage-tcpip.stack-direct`.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org28c7113" class="outline-2">
+<h2 id="org28c7113"><i>functor</i> everywhere</h2>
+<div class="outline-text-2" id="text-org28c7113">
+<p>
+<i>Functorize</i> the code seems to be a good idea where:
+</p>
+<ul class="org-ul">
+<li>the cost at the <i>runtime</i> is minimal</li>
+<li>abstraction is powerful (we can define new types, constraints, etc.)</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgfaab3ef" class="outline-2">
+<h2 id="orgfaab3ef">An example</h2>
+<div class="outline-text-2" id="text-orgfaab3ef">
+<p>
+We can show what is really going on about MirageOS about a little example on the
+abstraction of the `Console` to be able to write something. Imagine this <i>unikernel</i>:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="org8a73344"><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-governing">type</span> <span class="org-tuareg-font-lock-module">CONSOLE</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">sig</span>
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span>
+
+  <span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">endline</span> <span class="org-tuareg-font-lock-operator">:</span> t <span class="org-tuareg-font-lock-operator">-&gt;</span> string <span class="org-tuareg-font-lock-operator">-&gt;</span> unit
+<span class="org-tuareg-font-lock-governing">end</span>
+
+<span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">Make</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-variable-name">Console </span><span class="org-tuareg-font-lock-operator">:</span><span class="org-type"> CONSOLE</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">struct</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">start</span><span class="org-variable-name"> console</span> <span class="org-tuareg-font-lock-operator">=</span>
+    <span class="org-tuareg-font-lock-module">Console.</span>endline console <span class="org-string">"Hello World!"</span>
+<span class="org-tuareg-font-lock-governing">end</span>
+</pre>
+</div>
+
+<p>
+This <i>unikernel</i> expects an implementation of the <i>Console</i>. The idea behind the
+<i>Console</i> is to be able to write something on it. In MirageOS, the interface
+should provide something to represent the console (the <code>type t</code>) and what you
+can do with it (the function <code>val endline</code>).
+</p>
+
+<p>
+Then, usually, <code>Functoria</code> will generate a <code>main.ml</code> according the chosen target
+and apply our <i>functor</i> with the right implementation. But let's talk about
+implementations.
+</p>
+</div>
+
+<div id="outline-container-org98c5166" class="outline-3">
+<h3 id="org98c5166">Implementations</h3>
+<div class="outline-text-3" id="text-org98c5166">
+<p>
+We probably should have 2 implementations:
+</p>
+<ul class="org-ul">
+<li>an UNIX implementation which will use the <i>syscall</i> <code>write</code></li>
+<li>a <i>standalone</i> implementation which should work on any targets (like Solo5) -
+and it should depend only on the <i>caml</i> runtime</li>
+</ul>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="org9ae4159"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>file_descr
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">endline</span><span class="org-variable-name"> fd str</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">_</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>write_substring fd str <span class="org-highlight-numbers-number">0</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">String.</span>length str<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">_</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>write_substring fd <span class="org-string">"\n"</span> <span class="org-highlight-numbers-number">0</span> <span class="org-highlight-numbers-number">1</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span>
+<span class="org-tuareg-font-double-colon">;;</span>
+</pre>
+</div>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="orgfbdec12"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> out_channel
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">endline</span><span class="org-variable-name"> oc str</span> <span class="org-tuareg-font-lock-operator">=</span>
+  output_string oc str <span class="org-tuareg-font-lock-operator">;</span>
+  output_string oc <span class="org-string">"\n"</span>
+<span class="org-tuareg-font-double-colon">;;</span>
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgc418d87" class="outline-3">
+<h3 id="orgc418d87">Orchestration</h3>
+<div class="outline-text-3" id="text-orgc418d87">
+<p>
+As I said, then, <code>Functoria</code> will take the place and will generate a <code>main.ml</code>
+which will:
+</p>
+<ul class="org-ul">
+<li>apply <code>Unikernel.Make</code></li>
+<li>call the <code>start</code> function with the representation of the <i>Console</i></li>
+</ul>
+
+<p>
+Concretely, this file appears when you do <code>mirage configure</code> where you can
+specify the target. So, imagine we want to use the UNIX target (the default
+one), <code>Functoria</code> will generate:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="orga4a7838"><span class="org-tuareg-font-lock-governing">include</span> <span class="org-tuareg-font-lock-module">Unikernel.Make</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Console_unix</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-operator">=</span> start <span class="org-tuareg-font-lock-module">Unix.</span>stdout
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org884ae82" class="outline-3">
+<h3 id="org884ae82">Compilation</h3>
+<div class="outline-text-3" id="text-org884ae82">
+<p>
+The compilation can be separated into 2 steps where we compile object files
+first and we do the link according the target:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh">$ ocamlopt -c unikernel.ml
+$ ocamlopt -c console_unix.ml
+$ ocamlopt -c main.ml
+</pre>
+</div>
+
+<div class="org-src-container">
+<pre class="src src-sh">$ ocamlopt -o main -c unix.cmxa <span class="org-sh-escaped-newline">\</span>
+  console_unix.cmx unikernel.cmx main.cmx
+</pre>
+</div>
+
+<p>
+We can see that the most specific command according the target is the link step
+where <code>unix.cmxa</code> appears. Of course, for another target like Solo5, we will use
+<code>console_caml.ml</code>. The link step will be a bit complex where we will produce a
+<code>main.o</code> (with <code>-output-obj</code> option). Then, the <code>mirage</code> tool will properly call
+<code>ld</code> with a specific link script according the target.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org401b316" class="outline-3">
+<h3 id="org401b316">Results</h3>
+<div class="outline-text-3" id="text-org401b316">
+<p>
+Of course, all of this process is done by the <code>mirage</code> tool but it's interesting
+to understand what is going on when we do the usual:
+</p>
+<ul class="org-ul">
+<li><code>mirage configure</code></li>
+<li><code>mirage build</code></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgf7f6058" class="outline-3">
+<h3 id="orgf7f6058">Implementation according the target</h3>
+<div class="outline-text-3" id="text-orgf7f6058">
+<p>
+For some others targets - much more specials targets - implementation can
+directly use the <i>syscall</i> available on the target (like <code>solo5_console_write</code>)
+with <code>external</code>.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="org9724c31"><span class="org-tuareg-font-lock-governing">external</span> <span class="org-function-name">solo5_console_write</span> <span class="org-tuareg-font-lock-operator">:</span> string <span class="org-tuareg-font-lock-operator">-&gt;</span> unit <span class="org-tuareg-font-lock-operator">=</span> <span class="org-string">"solo5_console_write"</span>
+
+<span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> unit
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">endline</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span><span class="org-variable-name"> str</span> <span class="org-tuareg-font-lock-operator">=</span>
+  solo5_console_write str <span class="org-tuareg-font-lock-operator">;</span>
+  solo5_console_write <span class="org-string">"\n"</span>
+<span class="org-tuareg-font-double-colon">;;</span>
+</pre>
+</div>
+
+<p>
+As you can see, we still continue to follow the interface <code>CONSOLE</code> even if the
+representation of <code>t</code> is <code>unit</code> (so, nothing).
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgc146929" class="outline-2">
+<h2 id="orgc146929">The power of the abstraction</h2>
+<div class="outline-text-2" id="text-orgc146929">
+<p>
+The goal of all of that is to be able to switch easily from an implementation to
+another one - like, switch from <code>socket</code> given by the Unix module to our own
+implementation of the TCP/IP stack.
+</p>
+
+<p>
+Finally, the end user can completely discard details about underlying
+implementations used for his purpose and he can focus only on what he wants - of
+course, he must trust on what he uses. But if he does correctly the job, then
+others users can go further by composition and <i>hijack</i> underlying
+implementations by something else without any update of the main computation.
+</p>
+
+<p>
+An example of that is to make a website and plug without any headache a TLS
+support. It should only be a composition between the TCP/IP flow with TLS to
+emit the same abstraction as before:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">with_tls</span>
+  <span class="org-tuareg-font-lock-operator">:</span>  <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">Flow</span> <span class="org-tuareg-font-lock-governing">with type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> 'flow<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+  <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">Flow</span> <span class="org-tuareg-font-lock-governing">with type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> 'flow <span class="org-tuareg-font-lock-operator">*</span> <span class="org-tuareg-font-lock-module">Tls.</span>t<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+
+<p>
+Globally, each piece of your <i>unikernel</i> can be replaced by something else (more
+fast, more secure, etc.). MirageOS is not a monolithic software at end, it's a
+real framework to build your operating system.
+</p>
+</div>
+</div>
+]]></description>
+  <link>https://blog.x25519.net/2020-02-07--mirageos-compilation.html</link>
+  <pubDate>Sat, 08 Feb 2020 01:00:00 +0100</pubDate>
+</item>
 <item>
   <title>Hello World!</title>
   <description><![CDATA[
