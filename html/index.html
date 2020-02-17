@@ -17,6 +17,129 @@
 </div></div>
 <div id="content">
 
+<div class="headline"> <h1 class="post-title"><a href="2020-02-17--functor-magic.html">Functor, Application and magick!</a></h1>
+</div><div class="post-date"><2020-02-17></div><p>
+While I try to make an SMTP server in OCaml as an <i>unikernel</i>, I tried to deal
+with <code>Set.Make</code>. Imagine a situation where you define your type <code>elt = string</code>
+into a module <code>A</code> and you want to apply <code>Set.Make</code> inside the given module.
+</p>
+
+<div id="outline-container-orgecad225" class="outline-2">
+<h2 id="orgecad225">Interface</h2>
+<div class="outline-text-2" id="text-orgecad225">
+<p>
+Then, you would like to write a proper interface which describe result of your
+<i>functor</i>. It should be easy than:
+</p>
+
+<p>
+type elt = string
+</p>
+
+<p>
+include Set.S with type elt = elt
+</p>
+
+<p>
+But in my example, <code>Set.S</code> wants to (re)define <code>elt</code>. You probably miss the
+<a href="https://caml.inria.fr/pub/docs/manual-ocaml/manual030.html#sec252">destructive substitution</a> of the type <code>elt</code>.
+</p>
+
+<p>
+type elt = string
+</p>
+
+<p>
+include Set.S with type elt := elt
+</p>
+</div>
+</div>
+
+<div id="outline-container-org7d6db6b" class="outline-2">
+<h2 id="org7d6db6b">Implementation</h2>
+<div class="outline-text-2" id="text-org7d6db6b">
+<p>
+The implementation will be more trickier. Indeed, we probably want to do
+something like this:
+</p>
+
+<p>
+include Set.Make(struct type t = string let compare = String.compare end)
+</p>
+
+<p>
+And, fortunately for you, this snippet should work. However, it starts to be
+pretty incomprehensible when <code>type elt</code> is one of your type (<code>string</code> or
+<code>String.t</code> exists outside the scope of your module). We can take this example:
+</p>
+
+<p>
+include Set.Make(struct
+  type t = { v : string }
+  let compare { v= a; } { v= b; } = String.compare a b
+end)
+</p>
+
+<p>
+Into the interface, by side the redefinition of the type <code>elt</code>, nothing should
+change. However, the compilation fails with:
+</p>
+
+<p>
+$ ocamlc -c a.ml
+Error: The implementation a.ml does not match the interface a.cmi:
+       Type declarations do not match:
+         type elt
+       is not included in
+         type elt = { v : string; }
+</p>
+
+<p>
+Indeed, we should have a definition of <code>elt</code> outside the <code>struct ... end</code>:
+</p>
+
+<p>
+type elt = { v : string }
+</p>
+
+<p>
+include Set.Make(struct
+  type t = elt
+  let compare { v= a; } { v= b; } = String.compare a b
+end)
+</p>
+
+<p>
+However, now, OCaml complains about a multiple definition of the type <code>elt</code>. May
+be we can play more with the destructive substitution?
+</p>
+
+<p>
+type elt = { v : string }
+</p>
+
+<p>
+include
+  (Set.Make(struct
+     type t = elt
+     let compare { v= a; } { v= b; } = String.compare a b
+   end)
+</p>
+<pre class="example">
+Set.S with type elt := elt)
+</pre>
+</div>
+</div>
+
+<div id="outline-container-org21587b5" class="outline-2">
+<h2 id="org21587b5">Just a tip</h2>
+<div class="outline-text-2" id="text-org21587b5">
+<p>
+And it's work! So I leave this trick here to help some people.
+</p>
+</div>
+</div>
+
 <div class="headline"> <h1 class="post-title"><a href="2020-02-07--mirageos-compilation.html">MirageOS compilation</a></h1>
 </div><div class="post-date"><2020-02-08></div><p>
 MirageOS is not only one software but many libraries and tools which want to

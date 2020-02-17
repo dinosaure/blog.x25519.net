@@ -1,0 +1,15 @@
+#+title: MirageOS compilation
+#+date: <2020-02-14 Fri>
+
+Into my previous article, I just showed up some internals about the MirageOS
+compilation. However, the story is a bit complex. This article wants to go
+further and it will describe much more details.
+
+* A story about targets
+
+MirageOS can compile an /unikernel/ to 3 targets:
+- the UNIX target
+- the Solo5 target
+- the Xen target
+
+For each, we need to a special link step to produce the right ELF file.
