@@ -10,7 +10,7 @@ into a module ~A~ and you want to apply ~Set.Make~ inside the given module.
 Then, you would like to write a proper interface which describe result of your
 /functor/. It should be easy than:
 
-#+BEGIN ocaml
+#+BEGIN_SRC ocaml
 type elt = string
 
 include Set.S with type elt = elt
@@ -19,7 +19,7 @@ include Set.S with type elt = elt
 But in my example, ~Set.S~ wants to (re)define ~elt~. You probably miss the
 [[https://caml.inria.fr/pub/docs/manual-ocaml/manual030.html#sec252][destructive substitution]] of the type ~elt~.
 
-#+BEGIN ocaml
+#+BEGIN_SRC ocaml
 type elt = string
 
 include Set.S with type elt := elt
@@ -30,7 +30,7 @@ include Set.S with type elt := elt
 The implementation will be more trickier. Indeed, we probably want to do
 something like this:
 
-#+BEGIN ocaml
+#+BEGIN_SRC ocaml
 include Set.Make(struct type t = string let compare = String.compare end)
 #+END
 
@@ -38,7 +38,7 @@ And, fortunately for you, this snippet should work. However, it starts to be
 pretty incomprehensible when ~type elt~ is one of your type (~string~ or
 ~String.t~ exists outside the scope of your module). We can take this example:
 
-#+BEGIN ocaml
+#+BEGIN_SRC ocaml
 include Set.Make(struct
   type t = { v : string }
   let compare { v= a; } { v= b; } = String.compare a b
@@ -48,7 +48,7 @@ end)
 Into the interface, by side the redefinition of the type ~elt~, nothing should
 change. However, the compilation fails with:
 
-#+BEGIN shell
+#+BEGIN_SRC shell
 $ ocamlc -c a.ml
 Error: The implementation a.ml does not match the interface a.cmi:
        Type declarations do not match:
@@ -59,7 +59,7 @@ Error: The implementation a.ml does not match the interface a.cmi:
 
 Indeed, we should have a definition of ~elt~ outside the ~struct ... end~:
 
-#+BEGIN ocaml
+#+BEGIN_SRC ocaml
 type elt = { v : string }
 
 include Set.Make(struct
@@ -71,7 +71,7 @@ end)
 However, now, OCaml complains about a multiple definition of the type ~elt~. May
 be we can play more with the destructive substitution?
 
-#+BEGIN ocaml
+#+BEGIN_SRC ocaml
 type elt = { v : string }
 
 include

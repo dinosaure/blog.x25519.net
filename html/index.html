@@ -24,20 +24,22 @@ with <code>Set.Make</code>. Imagine a situation where you define your type <code
 into a module <code>A</code> and you want to apply <code>Set.Make</code> inside the given module.
 </p>
 
-<div id="outline-container-orgecad225" class="outline-2">
-<h2 id="orgecad225">Interface</h2>
-<div class="outline-text-2" id="text-orgecad225">
+<div id="outline-container-orgc85deee" class="outline-2">
+<h2 id="orgc85deee">Interface</h2>
+<div class="outline-text-2" id="text-orgc85deee">
 <p>
 Then, you would like to write a proper interface which describe result of your
 <i>functor</i>. It should be easy than:
 </p>
 
 <p>
+#+BEGIN<sub>SRC</sub> ocaml
 type elt = string
 </p>
 
 <p>
 include Set.S with type elt = elt
+#+END
 </p>
 
 <p>
@@ -46,25 +48,29 @@ But in my example, <code>Set.S</code> wants to (re)define <code>elt</code>. You 
 </p>
 
 <p>
+#+BEGIN<sub>SRC</sub> ocaml
 type elt = string
 </p>
 
 <p>
 include Set.S with type elt := elt
+#+END
 </p>
 </div>
 </div>
 
-<div id="outline-container-org7d6db6b" class="outline-2">
-<h2 id="org7d6db6b">Implementation</h2>
-<div class="outline-text-2" id="text-org7d6db6b">
+<div id="outline-container-org9428fca" class="outline-2">
+<h2 id="org9428fca">Implementation</h2>
+<div class="outline-text-2" id="text-org9428fca">
 <p>
 The implementation will be more trickier. Indeed, we probably want to do
 something like this:
 </p>
 
 <p>
+#+BEGIN<sub>SRC</sub> ocaml
 include Set.Make(struct type t = string let compare = String.compare end)
+#+END
 </p>
 
 <p>
@@ -74,10 +80,12 @@ pretty incomprehensible when <code>type elt</code> is one of your type (<code>st
 </p>
 
 <p>
+#+BEGIN<sub>SRC</sub> ocaml
 include Set.Make(struct
   type t = { v : string }
   let compare { v= a; } { v= b; } = String.compare a b
 end)
+#+END
 </p>
 
 <p>
@@ -86,12 +94,14 @@ change. However, the compilation fails with:
 </p>
 
 <p>
+#+BEGIN<sub>SRC</sub> shell
 $ ocamlc -c a.ml
 Error: The implementation a.ml does not match the interface a.cmi:
        Type declarations do not match:
          type elt
        is not included in
          type elt = { v : string; }
+#+END
 </p>
 
 <p>
@@ -99,6 +109,7 @@ Indeed, we should have a definition of <code>elt</code> outside the <code>struct
 </p>
 
 <p>
+#+BEGIN<sub>SRC</sub> ocaml
 type elt = { v : string }
 </p>
 
@@ -107,6 +118,7 @@ include Set.Make(struct
   type t = elt
   let compare { v= a; } { v= b; } = String.compare a b
 end)
+#+END
 </p>
 
 <p>
@@ -115,6 +127,7 @@ be we can play more with the destructive substitution?
 </p>
 
 <p>
+#+BEGIN<sub>SRC</sub> ocaml
 type elt = { v : string }
 </p>
 
@@ -128,12 +141,16 @@ include
 <pre class="example">
 Set.S with type elt := elt)
 </pre>
+
+<p>
+#+END
+</p>
 </div>
 </div>
 
-<div id="outline-container-org21587b5" class="outline-2">
-<h2 id="org21587b5">Just a tip</h2>
-<div class="outline-text-2" id="text-org21587b5">
+<div id="outline-container-orgf7f950e" class="outline-2">
+<h2 id="orgf7f950e">Just a tip</h2>
+<div class="outline-text-2" id="text-orgf7f950e">
 <p>
 And it's work! So I leave this trick here to help some people.
 </p>
