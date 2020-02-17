@@ -14,7 +14,7 @@ Then, you would like to write a proper interface which describe result of your
 type elt = string
 
 include Set.S with type elt = elt
-#+END
+#+END_SRC
 
 But in my example, ~Set.S~ wants to (re)define ~elt~. You probably miss the
 [[https://caml.inria.fr/pub/docs/manual-ocaml/manual030.html#sec252][destructive substitution]] of the type ~elt~.
@@ -23,7 +23,7 @@ But in my example, ~Set.S~ wants to (re)define ~elt~. You probably miss the
 type elt = string
 
 include Set.S with type elt := elt
-#+END
+#+END_SRC
 
 * Implementation
 
@@ -32,7 +32,7 @@ something like this:
 
 #+BEGIN_SRC ocaml
 include Set.Make(struct type t = string let compare = String.compare end)
-#+END
+#+END_SRC
 
 And, fortunately for you, this snippet should work. However, it starts to be
 pretty incomprehensible when ~type elt~ is one of your type (~string~ or
@@ -43,7 +43,7 @@ include Set.Make(struct
   type t = { v : string }
   let compare { v= a; } { v= b; } = String.compare a b
 end)
-#+END
+#+END_SRC
 
 Into the interface, by side the redefinition of the type ~elt~, nothing should
 change. However, the compilation fails with:
@@ -55,7 +55,7 @@ Error: The implementation a.ml does not match the interface a.cmi:
          type elt
        is not included in
          type elt = { v : string; }
-#+END
+#+END_SRC
 
 Indeed, we should have a definition of ~elt~ outside the ~struct ... end~:
 
@@ -66,7 +66,7 @@ include Set.Make(struct
   type t = elt
   let compare { v= a; } { v= b; } = String.compare a b
 end)
-#+END
+#+END_SRC
 
 However, now, OCaml complains about a multiple definition of the type ~elt~. May
 be we can play more with the destructive substitution?
@@ -80,7 +80,7 @@ include
      let compare { v= a; } { v= b; } = String.compare a b
    end)
    : Set.S with type elt := elt)
-#+END
+#+END_SRC
 
 * Just a tip
 

@@ -4,7 +4,7 @@
 <title>x25519.net</title>
 <description>x25519.net</description>
 <link>https://blog.x25519.net/</link>
-<lastBuildDate>Mon, 17 Feb 2020 17:11:48 +0100</lastBuildDate>
+<lastBuildDate>Mon, 17 Feb 2020 17:12:26 +0100</lastBuildDate>
 <item>
   <title>Functor, Application and magick!</title>
   <description><![CDATA[
@@ -14,54 +14,47 @@ with <code>Set.Make</code>. Imagine a situation where you define your type <code
 into a module <code>A</code> and you want to apply <code>Set.Make</code> inside the given module.
 </p>
 
-<div id="outline-container-orgc85deee" class="outline-2">
-<h2 id="orgc85deee">Interface</h2>
-<div class="outline-text-2" id="text-orgc85deee">
+<div id="outline-container-org0d1d79b" class="outline-2">
+<h2 id="org0d1d79b">Interface</h2>
+<div class="outline-text-2" id="text-org0d1d79b">
 <p>
 Then, you would like to write a proper interface which describe result of your
 <i>functor</i>. It should be easy than:
 </p>
 
-<p>
-#+BEGIN<sub>SRC</sub> ocaml
-type elt = string
-</p>
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">elt</span> <span class="org-tuareg-font-lock-operator">=</span> string
 
-<p>
-include Set.S with type elt = elt
-#+END
-</p>
+<span class="org-tuareg-font-lock-governing">include</span> <span class="org-tuareg-font-lock-module">Set.S</span> <span class="org-tuareg-font-lock-governing">with type</span> <span class="org-type">elt</span> <span class="org-tuareg-font-lock-operator">=</span> elt
+</pre>
+</div>
 
 <p>
 But in my example, <code>Set.S</code> wants to (re)define <code>elt</code>. You probably miss the
 <a href="https://caml.inria.fr/pub/docs/manual-ocaml/manual030.html#sec252">destructive substitution</a> of the type <code>elt</code>.
 </p>
 
-<p>
-#+BEGIN<sub>SRC</sub> ocaml
-type elt = string
-</p>
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">elt</span> <span class="org-tuareg-font-lock-operator">=</span> string
 
-<p>
-include Set.S with type elt := elt
-#+END
-</p>
+<span class="org-tuareg-font-lock-governing">include</span> <span class="org-tuareg-font-lock-module">Set.S</span> <span class="org-tuareg-font-lock-governing">with type</span> <span class="org-type">elt</span> <span class="org-tuareg-font-lock-operator">:=</span> elt
+</pre>
+</div>
 </div>
 </div>
 
-<div id="outline-container-org9428fca" class="outline-2">
-<h2 id="org9428fca">Implementation</h2>
-<div class="outline-text-2" id="text-org9428fca">
+<div id="outline-container-org8c46ac2" class="outline-2">
+<h2 id="org8c46ac2">Implementation</h2>
+<div class="outline-text-2" id="text-org8c46ac2">
 <p>
 The implementation will be more trickier. Indeed, we probably want to do
 something like this:
 </p>
 
-<p>
-#+BEGIN<sub>SRC</sub> ocaml
-include Set.Make(struct type t = string let compare = String.compare end)
-#+END
-</p>
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">include</span> <span class="org-tuareg-font-lock-module">Set.Make</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">struct</span> <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> string <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">compare</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">String.</span>compare <span class="org-tuareg-font-lock-governing">end</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
 
 <p>
 And, fortunately for you, this snippet should work. However, it starts to be
@@ -69,78 +62,65 @@ pretty incomprehensible when <code>type elt</code> is one of your type (<code>st
 <code>String.t</code> exists outside the scope of your module). We can take this example:
 </p>
 
-<p>
-#+BEGIN<sub>SRC</sub> ocaml
-include Set.Make(struct
-  type t = { v : string }
-  let compare { v= a; } { v= b; } = String.compare a b
-end)
-#+END
-</p>
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">include</span> <span class="org-tuareg-font-lock-module">Set.Make</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">struct</span>
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">{</span></span> v <span class="org-tuareg-font-lock-operator">:</span><span class="org-type"> string </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">}</span></span>
+<span class="org-type">  </span><span class="org-tuareg-font-lock-governing">let</span><span class="org-type"> compare </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">{</span></span><span class="org-type"> v</span><span class="org-tuareg-font-lock-operator">=</span><span class="org-type"> a</span><span class="org-tuareg-font-lock-operator">;</span><span class="org-type"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">}</span></span><span class="org-type"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">{</span></span><span class="org-type"> v</span><span class="org-tuareg-font-lock-operator">=</span><span class="org-type"> b</span><span class="org-tuareg-font-lock-operator">;</span><span class="org-type"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">}</span></span><span class="org-type"> </span><span class="org-tuareg-font-lock-operator">=</span><span class="org-type"> </span><span class="org-tuareg-font-lock-module">String.</span><span class="org-type">compare a b</span>
+<span class="org-tuareg-font-lock-governing">end</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
 
 <p>
 Into the interface, by side the redefinition of the type <code>elt</code>, nothing should
 change. However, the compilation fails with:
 </p>
 
-<p>
-#+BEGIN<sub>SRC</sub> shell
-$ ocamlc -c a.ml
+<div class="org-src-container">
+<pre class="src src-shell">$ ocamlc -c a.ml
 Error: The implementation a.ml does not match the interface a.cmi:
        Type declarations do not match:
-         type elt
-       is not included in
-         type elt = { v : string; }
-#+END
-</p>
+         <span class="org-builtin">type</span> elt
+       is not included<span class="org-keyword"> in</span>
+         <span class="org-builtin">type</span> <span class="org-variable-name">elt</span> = <span class="org-rainbow-delimiters-depth-1">{</span> v : string; <span class="org-rainbow-delimiters-depth-1">}</span>
+</pre>
+</div>
 
 <p>
 Indeed, we should have a definition of <code>elt</code> outside the <code>struct ... end</code>:
 </p>
 
-<p>
-#+BEGIN<sub>SRC</sub> ocaml
-type elt = { v : string }
-</p>
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">elt</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> v <span class="org-tuareg-font-lock-operator">:</span> string <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span>
 
-<p>
-include Set.Make(struct
-  type t = elt
-  let compare { v= a; } { v= b; } = String.compare a b
-end)
-#+END
-</p>
+<span class="org-tuareg-font-lock-governing">include</span> <span class="org-tuareg-font-lock-module">Set.Make</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">struct</span>
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> elt
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">compare</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">{</span></span> v<span class="org-tuareg-font-lock-operator">=</span> a<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">}</span></span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">{</span></span> v<span class="org-tuareg-font-lock-operator">=</span> b<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">}</span></span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">String.</span>compare a b
+<span class="org-tuareg-font-lock-governing">end</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
 
 <p>
 However, now, OCaml complains about a multiple definition of the type <code>elt</code>. May
 be we can play more with the destructive substitution?
 </p>
 
-<p>
-#+BEGIN<sub>SRC</sub> ocaml
-type elt = { v : string }
-</p>
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">elt</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> v <span class="org-tuareg-font-lock-operator">:</span> string <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span>
 
-<p>
-include
-  (Set.Make(struct
-     type t = elt
-     let compare { v= a; } { v= b; } = String.compare a b
-   end)
-</p>
-<pre class="example">
-Set.S with type elt := elt)
+<span class="org-tuareg-font-lock-governing">include</span>
+  <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Set.</span><span class="org-tuareg-font-lock-constructor">Make</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-tuareg-font-lock-governing">struct</span>
+     <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> elt
+     <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">compare</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">{</span></span> v<span class="org-tuareg-font-lock-operator">=</span> a<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">}</span></span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">{</span></span> v<span class="org-tuareg-font-lock-operator">=</span> b<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">}</span></span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">String.</span>compare a b
+   <span class="org-tuareg-font-lock-governing">end</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span>
+   <span class="org-tuareg-font-lock-operator">:</span><span class="org-type"> </span><span class="org-tuareg-font-lock-module">Set.</span><span class="org-type">S </span><span class="org-tuareg-font-lock-governing">with type</span><span class="org-type"> elt </span><span class="org-tuareg-font-lock-operator">:=</span><span class="org-type"> elt</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
 </pre>
-
-<p>
-#+END
-</p>
+</div>
 </div>
 </div>
 
-<div id="outline-container-orgf7f950e" class="outline-2">
-<h2 id="orgf7f950e">Just a tip</h2>
-<div class="outline-text-2" id="text-orgf7f950e">
+<div id="outline-container-orgec230ee" class="outline-2">
+<h2 id="orgec230ee">Just a tip</h2>
+<div class="outline-text-2" id="text-orgec230ee">
 <p>
 And it's work! So I leave this trick here to help some people.
 </p>
