@@ -20,11 +20,11 @@ let console = default_console
 
 let packages =
   let tuyau = "git+https://github.com/dinosaure/tuyau.git" in
-  let paf = "git+https://github.com/dinosaure/paf-le-chien.git" in
+  let paf = "git+https://github.com/dinosaure/paf-le-chien.git#fix-blog" in
   [ package "httpaf"
   ; package "irmin-mirage-git"
 
-  ; package ~pin:tuyau ~sublibs:["mirage.tcp"] "tuyau"
+  ; package ~pin:tuyau ~sublibs:["tcp"] "tuyau-mirage"
   ; package ~pin:paf "paf" ]
 
 let () =
