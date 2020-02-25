@@ -11,13 +11,12 @@ let port =
 let __blog =
   foreign "Unikernel.Make"
     ~keys:[ Key.abstract remote; Key.abstract port ]
-    (console @-> time @-> stackv4 @-> resolver @-> conduit @-> job)
+    (console @-> stackv4 @-> resolver @-> conduit @-> job)
 
 let stack = generic_stackv4 default_network
 let conduit = conduit_direct stack
 let resolver = resolver_dns stack
 let console = default_console
-let time = default_time
 
 let packages =
   let tuyau = "git+https://github.com/dinosaure/tuyau.git#fix-blog" in
@@ -33,4 +32,4 @@ let packages =
 let () =
   register "__blog"
     ~packages
-    [ __blog $ console $ time $ stack $ resolver $ conduit ]
+    [ __blog $ console $ stack $ resolver $ conduit ]
