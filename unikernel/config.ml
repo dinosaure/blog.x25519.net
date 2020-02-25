@@ -24,7 +24,8 @@ let packages =
   [ package "httpaf"
   ; package "irmin-mirage-git"
 
-  ; package ~pin:tuyau ~sublibs:["tcp"] "tuyau-mirage"
+  ; package ~pin:tuyau "tuyau-tls"
+  ; package ~pin:tuyau ~sublibs:["tcp"; "tls"] "tuyau-mirage"
   ; package ~pin:paf "paf" ]
 
 let () =
