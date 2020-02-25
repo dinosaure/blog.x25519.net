@@ -125,7 +125,7 @@ module Make
     | Ok x -> f x
     | Error err -> Lwt.return (Error err)
 
-  let start console stack resolver conduit =
+  let start console time stack resolver conduit =
     connect_store resolver conduit >>= fun (store, remote) ->
     Sync.pull store remote `Set >>= function
     | Error (`Msg err) -> failwith err
