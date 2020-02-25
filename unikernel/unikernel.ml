@@ -1,9 +1,10 @@
 module Make
     (Console : Mirage_console.S)
+    (Time : Mirage_time.S)
     (StackV4 : Mirage_stack.V4)
     (Resolver : Resolver_lwt.S)
     (Conduit : Conduit_mirage.S) = struct
-  module Paf = Paf.Make(StackV4)
+  module Paf = Paf.Make(Time)(StackV4)
   module TCP = Paf.TCP
 
   module Store = Irmin_mirage_git.Mem.KV(Irmin.Contents.String)
