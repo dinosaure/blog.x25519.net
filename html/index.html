@@ -17,6 +17,850 @@
 </div></div>
 <div id="content">
 
+<div class="headline"> <h1 class="post-title"><a href="2020-02-27--tuyau.html">Tuyau</a></h1>
+</div><div class="post-date"><2020-02-27></div>
+<div id="outline-container-orgb5d066c" class="outline-2">
+<h2 id="orgb5d066c">Tuyau, the next conduit</h2>
+<div class="outline-text-2" id="text-orgb5d066c">
+<p>
+If you look into the MirageOS ecosystem, you should already see <a href="https://github.com/mirage/ocaml-conduit.git">conduit</a> as a
+library used by many others projects such as <a href="https://github.com/mirage/ocaml-cohttp.git">cohttp</a>. However, even if it is used
+by these projects, at this time, nobody can really explain the goal of Conduit.
+</p>
+
+<p>
+Conduit wants to solve 2 problems:
+</p>
+<ul class="org-ul">
+<li>Start a <i>transmission</i> from an URI or, more generally, an <i>endpoint</i></li>
+<li>Be able to compose <i>protocols</i></li>
+</ul>
+
+<p>
+At this stage, it's mostly a pain to use Conduit for several reasons. But one of
+them is the lack of documentation. Conduit still exists because people
+copy/paste some piece of codes available in some projects.
+</p>
+
+<p>
+However, to understand how Conduit can resolve your URI and give you a way to
+communicate to your peer, nobody understands how to extend it, how to trace it
+and finally how to use it.
+</p>
+
+<p>
+From that, one year ago (at the MirageOS retreat), we decided to make a new
+version of Conduit: Tuyau (french word for a <i>pipe</i>). Of course, we don't want
+to repeat errors of the past. This article want to describe Conduit, and, by
+this way, Tuyau.
+</p>
+
+<p>
+It can be a good opportunity to see some strange OCaml things!
+</p>
+</div>
+
+<div id="outline-container-orgbff6875" class="outline-3">
+<h3 id="orgbff6875">Start a <i>transmission</i></h3>
+<div class="outline-text-3" id="text-orgbff6875">
+<p>
+In many ways, in some projects, we want to start a <i>transmission</i> with a peer.
+We would like to communicate with it. However, we don't want to handle by hands
+details to start this transmission. We can take an easy example with <a href="https://github.com/mirage/ocaml-git.git">ocaml-git</a>.
+</p>
+
+<p>
+When we want to push/pull to an other peer, we have 4 possibilities:
+</p>
+<ul class="org-ul">
+<li>Use directly the Smart (Git) protocol over TCP/IP
+It appears when you do: <code>git clone git://host/repo</code></li>
+<li>Use the Smart (Git) protocol over SSH
+It's the usual case when you do: <code>git clone git@host:repo</code></li>
+<li>Use the Smart (Git) protocol over HTTP
+It's when you do: <code>git clone http://host/repo</code></li>
+<li>And final case is over HTTP + TLS or, in other words, HTTPS
+<code>git clone https://host/repo</code></li>
+</ul>
+
+<p>
+For all of these cases, we use systematically the same Smart protocol to
+communicate with a peer<sup><a id="fnr.1" class="footref" href="#fn.1">1</a></sup>. So we should abstract all of these cases behind
+something like a common interface.
+</p>
+
+<p>
+Another aspect is from the point of view of the maintainer of Git:
+</p>
+<ul class="org-ul">
+<li>we don't want to depend on all of these protocols</li>
+<li>it's sane to not be aware about underlying implementation</li>
+</ul>
+
+<p>
+The first point is really important. Git is only about Git and we should not
+depend on a specific implementation of HTTP or a specific implementation of SSH.
+The current version of Git did the choice to use Curl to be able to communicate
+with the HTTP protocol. We should be able to be abstracted from that in OCaml
+and let the user to choose which implementation of HTTP he wants.
+</p>
+
+<p>
+The best is to start a transmission and let the user, at another layer, to
+<i>feed</i> something which aggregate implementation of protocols. By this way, we
+can let the user to <i>feed</i> Tuyau <b>only</b> with an SSH implementation and, by this
+way, ensure that Git will start a <i>transmission</i> only with SSH.
+</p>
+
+<p>
+The second point is not really valid when we can argue some security points. As
+a maintainer, we would be able to enforce a transmission over TLS for example.
+But we will see later how we can solve that into Tuyau.
+</p>
+
+<p>
+Finally, we want something like:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="org7dbdf8f"><span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">resolve</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-module">Tuyau.</span>t <span class="org-tuareg-font-lock-operator">-&gt;</span> uri <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-module">Unix.</span>socket
+</pre>
+</div>
+
+<p>
+Where <code>Unix.socket</code> is already connected to our peer. Then, we can start to
+<code>Unix.read</code> and <code>Unix.write</code> on the given socket and speak with the Smart
+protocol to our peer.
+</p>
+
+<p>
+<code>Tuyau.t</code> represents globally our possibilities (our available protocols). At
+least, the user should depend on that - but it does not imply a dependence to
+implementation of available protocols.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orga2b95f1" class="outline-3">
+<h3 id="orga2b95f1">A transmission, a protocol or a flow</h3>
+<div class="outline-text-3" id="text-orga2b95f1">
+<p>
+The first bad point of Conduit is terms used by it which are not really defined.
+A transmission, a protocol or a flow are not very clear and we can not strictly
+define the purpose of them with Conduit.
+</p>
+
+<p>
+Tuyau wants to be clear on these words and it gives to us a true definition of
+them. Then, we will use them as Tuyau defines them.
+</p>
+</div>
+
+<div id="outline-container-org3772ffe" class="outline-4">
+<h4 id="org3772ffe">A Protocol</h4>
+<div class="outline-text-4" id="text-org3772ffe">
+<p>
+A communication protocol is a system of rules that allows entities to transmit
+information. In the case of Tuyau, this kind of information must not be
+arbitrary. The protocol should only solve communication problems such as
+<i>routing</i>.
+</p>
+
+<p>
+When we talk about a protocol, it's only about a standard which is able to
+transmit a <i>payload</i>. Interpretation of the <i>payload</i> is not done by the
+<i>protocol</i> but by the user of this library.
+</p>
+
+<p>
+For example, the Transmission Control Protocol (TCP) <b>is</b> a protocol according
+to Tuyau because it is able to transmit <i>payload</i> without interpreting it. A
+counter example is the Simple Mail Transfer Protocol (SMTP) which gives an
+interpretation of the <i>payload</i> (such as <code>EHLO</code> which is different to <code>QUIT</code>).
+</p>
+
+<p>
+This difference is important to unlock the ability to compose <i>protocols</i>. An
+other protocol according to Tuyau is Transport Layer Security (TLS) - which
+wants to solve privacy and data integrity. Tuyau is able to compose protocols
+together like TCP ∘ TLS to make a new protocol. From this composition, the user
+is able to implement Secure Simple Mail Transfer Protocol (SSMTP) or HyperText
+Transfer Protocol Secure (HTTPS) - both use TCP and TLS.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org6c85402" class="outline-4">
+<h4 id="org6c85402">A <code>FLOW</code></h4>
+<div class="outline-text-4" id="text-org6c85402">
+<p>
+To be able to do this composition, the protocol must respect (at least) an
+interface: the <code>FLOW</code> interface. It defines an abstract <code>type t</code> and functions
+like <code>recv</code> or <code>send</code>. These functions give to us the <i>payload</i>. Rules to solve
+communication problems are already processed internally.
+</p>
+
+<p>
+In other terms, from a given <code>FLOW</code>, the user should not handle <i>routing</i>,
+privacy or data integrity (or some others problems). The user should only be
+able to process the <i>payload</i>.
+</p>
+
+<p>
+Finally, representation of a TCP protocol is a <code>FLOW</code>. VCHAN protocol or User
+Datagram Protocol (UDP) can be represented as a <code>FLOW</code>. However, TLS is not a
+flow as is but <i>a layer</i> on top of another protocol/~FLOW~. Composition with it
+should look like:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">with_tls</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">FLOW</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">FLOW</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+
+<p>
+From a given <code>FLOW</code>, we <i>wrap</i> it with TLS and return a new <code>FLOW</code>. Such a
+composition exists also for <a href="https://en.wikipedia.org/wiki/WireGuard">WireGuard</a> or <a href="http://www.noiseprotocol.org/">Noise</a> layers. Tuyau wants to solve
+this composition by a strict OCaml interface of the <code>FLOW</code>.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orge20d52e" class="outline-4">
+<h4 id="orge20d52e">About Conduit</h4>
+<div class="outline-text-4" id="text-orge20d52e">
+<p>
+These ideas already exist with <code>Conduit_mirage.Flow</code> and
+<code>Conduit_mirage.with_tls</code>. However, it appears 2 problems:
+</p>
+<ul class="org-ul">
+<li>extension of implementations</li>
+<li>composition with user-defined <code>FLOW</code></li>
+</ul>
+
+<p>
+Currently, Conduit delimits implementations by a polymorphic variants
+<code>Conduit.{client,server}</code>. We should not blame that when <a href="https://caml.inria.fr/pub/docs/manual-ocaml/extensiblevariants.html">extensible variants</a>
+appears only on OCaml 4.02.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgc028d4c" class="outline-3">
+<h3 id="orgc028d4c">Abstract! Abstract everything!</h3>
+<div class="outline-text-3" id="text-orgc028d4c">
+<p>
+As we said, the most important idea is to be able to:
+</p>
+<ol class="org-ol">
+<li>abstract the <i>flow</i></li>
+<li>still be able to use it to receive and send <i>payload</i></li>
+</ol>
+
+<p>
+In your first example, we return an <code>Unix.socket</code> which is obviously not good,
+especially if we want to make an <i>unikernel</i> (which can not usually have
+anythings from the <code>Unix</code> module). In this way, we already did an interface to
+be able to easily abstract our implementations: <a href="https://github.com/mirage/mirage-flow">mirage-flow</a>.
+</p>
+
+<p>
+We say that any protocols like TCP or VCHAN can be described with this interface
+where we have the <code>recv</code> function and the <code>send</code> function. So, instead to return
+a concrete type, we return an abstract type like:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-governing">type</span> <span class="org-tuareg-font-lock-module">FLOW</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">sig</span>
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">t</span>
+
+  <span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">recv</span> <span class="org-tuareg-font-lock-operator">:</span> t <span class="org-tuareg-font-lock-operator">-&gt;</span> bytes <span class="org-tuareg-font-lock-operator">-&gt;</span> int
+  <span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">send</span> <span class="org-tuareg-font-lock-operator">:</span> t <span class="org-tuareg-font-lock-operator">-&gt;</span> string <span class="org-tuareg-font-lock-operator">-&gt;</span> unit
+<span class="org-tuareg-font-lock-governing">end</span>
+
+<span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">flow</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-constructor">Flow</span> <span class="org-tuareg-font-lock-operator">:</span> 'flow <span class="org-tuareg-font-lock-operator">*</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">FLOW</span> <span class="org-tuareg-font-lock-governing">with type</span> <span class="org-type">t</span> <span class="org-tuareg-font-lock-operator">=</span> 'flow<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> flow
+<span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">resolve</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-module">Tuyau.</span>t <span class="org-tuareg-font-lock-operator">-&gt;</span> uri <span class="org-tuareg-font-lock-operator">-&gt;</span> flow
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-constructor">Flow</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-variable-name">flow</span><span class="org-tuareg-font-lock-operator">,</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-tuareg-font-lock-governing">module</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-module">Flow</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-operator">=</span>
+    resolve tuyau <span class="org-string">"https://google.fr/"</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-module">Flow.</span>send flow <span class="org-string">"Hello World!"</span>
+</pre>
+</div>
+
+<p>
+In our example, we use a GADT to keep the type equality between our value
+<code>'flow</code> and the <code>type t</code> of our module <code>Flow</code>. We usually call it an
+<i>existential type wrapper</i>. It allows us to <i>create</i> a new type <code>'flow</code> and
+associate it to an implementation <code>Flow</code>.
+</p>
+
+<p>
+The idea behind is: the <code>type t</code> can concretely be anything. It can be an
+<code>Unix.socket</code> if we want to make an <i>unikernel</i> for Unix but it can be something
+else like a <code>Tcpip_stack_direct.t</code> (the TCP/IP implementation usually used by
+MirageOS).
+</p>
+
+<p>
+With the associated module, we still continue to be able to read and write
+something as we can do with an <code>Unix.socket</code>.
+</p>
+
+<p>
+And of course, we can forget about details. You can denote that we already
+prepare the concrete value to be able to communicate with our peer. I mean,
+<code>resolve</code> do something more complex than just create a new resource such as an
+<code>Unix.socket</code>. It connects the socket to our peer. It's why we talk about
+a <i>resolution</i> process.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org66e7d1c" class="outline-3">
+<h3 id="org66e7d1c">Resolution</h3>
+<div class="outline-text-3" id="text-org66e7d1c">
+<p>
+Tuyau can not define by itself the resolution. Resolution is commonly a DNS
+resolution to get the IP from a <i>domain-name</i>. However, into an <i>unikernel</i>,
+nothing ensures that we properly have a DNS resolver (such as our
+<code>/etc/resolv.conf</code>).
+</p>
+
+<p>
+In other side, definition of an <i>endpoint</i> can not fully exist where it depends
+on the returned <code>'flow</code>. For example, if we give to you a TCP/IP <code>Flow</code>, used
+<i>endpoint</i> to connect your <code>'flow</code> should be an IP and a <i>port</i>. However, the
+<i>endpoint</i> can represent something else like a <i>serial-port</i> connected to our
+MirageOS or a virtual network kernel interface (TUN/TAP), etc. Finally,
+definition of an <i>endpoint</i> is <b>intrinsic</b> to our implementation of the <code>Flow</code>.
+</p>
+
+<p>
+Concretely, for an <code>Unix.socket</code> flow, we need an <code>Unix.sockaddr</code>. For a
+<code>Tcpip_stack_direct.t</code> flow, we need an <code>Ipaddr.V4.t</code> and an <code>int</code> as a <i>port</i>.
+</p>
+
+<p>
+At the end, we agree that the most general (by convention) description of the
+<i>endpoint</i> is the <i>domain-name</i>. By knowing that, we decided to let the user to
+construct an <i>endpoint</i> from a concrete <code>[`host] Domain_name.t</code> (as Conduit
+decided to construct an <code>Conduit.endp</code> from an <code>Uri.t</code>).
+</p>
+</div>
+
+<div id="outline-container-org37a67ab" class="outline-4">
+<h4 id="org37a67ab">How Conduit does that?!</h4>
+<div class="outline-text-4" id="text-org37a67ab">
+<p>
+Conduit do the same job where it wants to construct an <i>endpoint</i>
+(<code>Conduit.endp</code>) from an <code>Uri.t</code>. To choose which implementation we will use, it
+looks at the <i>scheme</i> of the <code>Uri.t</code>.
+</p>
+
+<p>
+From our perspectives, this is not a good choice where the <i>scheme</i> is not a
+real definition of the underlying protocol used as it's explained into the
+<a href="https://tools.ietf.org/html/rfc7595#section-3.8">RFC7595</a>:
+</p>
+
+<blockquote>
+<p>
+A scheme name is not a "protocol."
+</p>
+</blockquote>
+
+<p>
+However, even if <code>Conduit.endp</code> should be extensible as
+<code>Conduit.{client,server}</code> (because they are <b>intrinsic</b> each other), they still
+are delimited by an exhaustive list of constructors:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">endp</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">[</span></span> <span class="org-tuareg-font-lock-constructor">`TCP</span> <span class="org-keyword">of</span> <span class="org-tuareg-font-lock-module">Ipaddr.</span>t <span class="org-tuareg-font-lock-operator">*</span> int
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">`Unix_domain_socket</span> <span class="org-keyword">of</span> string
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">`Vchan_direct</span> <span class="org-keyword">of</span> int <span class="org-tuareg-font-lock-operator">*</span> string
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">`Vchan_domain_socket</span> <span class="org-keyword">of</span> string <span class="org-tuareg-font-lock-operator">*</span> string
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">`TLS</span> <span class="org-keyword">of</span> string <span class="org-tuareg-font-lock-operator">*</span> endp <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">]</span></span>
+
+<span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">client</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">[</span></span> tcp_client <span class="org-tuareg-font-lock-operator">|</span> vchan_client <span class="org-tuareg-font-lock-operator">|</span> client tls_client <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">]</span></span> 
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org8d03ac1" class="outline-4">
+<h4 id="org8d03ac1">Abstract, again!</h4>
+<div class="outline-text-4" id="text-org8d03ac1">
+<p>
+Tuyau comes with an <a href="https://github.com/dbuenzli/hmap"><i>heterogeneous</i> map</a> to be able to let the user to define a
+<code>resolve</code> function which is able to return any (structurally different)
+<i>endpoint</i>. The user must create a <i>type witness</i> which corresponds to a value
+<code>'t Tuyau.key</code> and represents type of the <i>endpoint</i>.
+</p>
+
+<p>
+With that, the user can <i>register</i> a <code>resolve</code> function which returns the same
+type as your <code>'t Tuyau.key</code>. In others words, we are able to provide:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">resolvers</span>
+<span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">'t key</span>
+
+<span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">key</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-label">name</span><span class="org-tuareg-font-lock-operator">:</span>string <span class="org-tuareg-font-lock-operator">-&gt;</span> 't key
+<span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">register</span>
+  <span class="org-tuareg-font-lock-operator">:</span>  <span class="org-tuareg-font-lock-label">key</span><span class="org-tuareg-font-lock-operator">:</span>'t key
+  <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span> <span class="org-tuareg-font-lock-constructor">`host</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-module">Domain_name.</span>t <span class="org-tuareg-font-lock-operator">-&gt;</span> 't<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+  <span class="org-tuareg-font-lock-operator">-&gt;</span> resolvers
+  <span class="org-tuareg-font-lock-operator">-&gt;</span> resolvers
+</pre>
+</div>
+
+<p>
+By this way, the user is able to implement the resolution process and can use a
+DNS resolver or a fixed resolution table (like an <code>Hashtbl.t</code>). Tuyau needs to
+know who can create a concrete <i>endpoint</i> from a <code>[ `host ] Domain_name.t</code> to
+pass it to a protocol implementation. It's why you need to register your
+<code>resolve</code> function into our <code>resolvers</code>.
+</p>
+
+<p>
+Finally, Tuyau will execute all of your <i>resolvers</i> and create a list of
+heterogeneous <i>endpoints</i>. Then, from them, it is able to try to start a
+transmission to your peer.
+</p>
+</div>
+
+<ul class="org-ul">
+<li><a id="orga5cdaea"></a>Give me the priority<br>
+<div class="outline-text-5" id="text-orga5cdaea">
+<p>
+Of course, <code>resolver</code> can be registered with a priority. By that, not only will
+we use your priority resolver, but we will also prioritize initialization of
+your associated protocol.
+</p>
+
+<p>
+The idea is to let the user to prioritize secure transmission over <i>unsecure</i>
+transmission even if both are available (like <code>https</code> and <code>http</code>).
+</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgc2ef22e" class="outline-3">
+<h3 id="orgc2ef22e">Tuyau by an example</h3>
+<div class="outline-text-3" id="text-orgc2ef22e">
+<p>
+Tuyau (and Conduit) wants to solve a difficult task which does not appear into
+usual cases. If you want to make an UNIX program, all of that is useless because
+we can directly use the UNIX environment.
+</p>
+
+<p>
+However, for MirageOS where nothing exists (even a DNS resolver), we need a way
+to start a transmission according to the context of the compilation. In fact,
+the TCP/IP implementation depends on the target, the configuration of your
+<i>unikernel</i>, what the user wants, etc.
+</p>
+
+<p>
+We will see a little example to fully understand the underlying Tuyau stack.
+What you should do as the maintainer of Git, as the developer of the protocol or
+basically as the user of Tuyau.
+</p>
+</div>
+
+<div id="outline-container-orga00f51f" class="outline-4">
+<h4 id="orga00f51f">Register your protocol with Tuyau</h4>
+<div class="outline-text-4" id="text-orga00f51f">
+<p>
+To play with protocols, we must <i>register</i> our protocol to Tuyau. The
+registration is global to your program. Indeed, Tuyau is able to extract your
+implementation from anywhere - internally, we save it into a global <code>Hashtbl.t</code>.
+</p>
+
+<p>
+Let's start to provide an UNIX TCP/IP protocol and register it into Tuyau!
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="org95ed791"><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">TCP</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">struct</span>
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">flow</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>file_descr
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">endpoint</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>sockaddr
+
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">make</span><span class="org-variable-name"> sockaddr</span> <span class="org-tuareg-font-lock-operator">=</span>
+    <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">socket</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>socket <span class="org-tuareg-font-lock-module">Unix.</span><span class="org-tuareg-font-lock-constructor">PF_INET</span> <span class="org-tuareg-font-lock-module">Unix.</span><span class="org-tuareg-font-lock-constructor">SOCK_STREAM</span> <span class="org-tuareg-font-lock-governing">in</span>
+    <span class="org-tuareg-font-lock-module">Unix.</span>connect socket sockaddr <span class="org-tuareg-font-lock-operator">;</span> socket
+
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">recv</span><span class="org-variable-name"> socket buf off len</span> <span class="org-tuareg-font-lock-operator">=</span>
+    <span class="org-tuareg-font-lock-module">Unix.</span>read socket buf off len
+
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">send</span><span class="org-variable-name"> socket buf</span> <span class="org-tuareg-font-lock-operator">=</span>
+    <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">len</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">String.</span>length buf <span class="org-tuareg-font-lock-governing">in</span>
+    <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">_</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>write socket <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Bytes.</span>unsafe_of_string buf<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-highlight-numbers-number">0</span> len
+    <span class="org-tuareg-font-lock-governing">in</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span>
+
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">close</span><span class="org-variable-name"> socket</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>close socket
+<span class="org-tuareg-font-lock-governing">end</span>
+</pre>
+</div>
+
+<p>
+We must provide these functions into our module and 2 types:
+</p>
+<ul class="org-ul">
+<li>the <code>flow</code> type</li>
+<li>the <code>endpoint</code> type</li>
+</ul>
+
+<p>
+From that, Tuyau (a specialized version according to your <i>backend</i>) provides
+a way to <i>register</i> your protocol globally. We must create our <i>type witness</i>
+about our <i>endpoint</i> and associate it with your protocol:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">sockaddr</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-module">Unix.</span><span class="org-type">sockadr </span><span class="org-tuareg-font-lock-module">Tuyau.</span><span class="org-type">key </span><span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Tuyau.</span>key <span class="org-tuareg-font-lock-label">~name</span><span class="org-tuareg-font-lock-operator">:</span><span class="org-string">"sockaddr"</span>
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">tcp</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-module">Unix.</span><span class="org-type">file_descr </span><span class="org-tuareg-font-lock-module">Tuyau.</span><span class="org-type">protocol </span><span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-module">Tuyau.</span>register_protocol <span class="org-tuareg-font-lock-label">~key</span><span class="org-tuareg-font-lock-operator">:</span>sockaddr <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">TCP</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+
+<p>
+And it's enough! You probably should expose <code>sockaddr</code> and <code>tcp</code>. We will see
+where we can use it. But the registration is done into our internal &amp; global
+<code>Hashtbl.t</code>. Any <b><b>link</b></b> with this piece of code will make your protocol
+available through Tuyau.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgfcfc9ca" class="outline-4">
+<h4 id="orgfcfc9ca">Register your resolver with Tuyau</h4>
+<div class="outline-text-4" id="text-orgfcfc9ca">
+<p>
+Into another project/library/executable/unikernel, you are able to define your
+resolution process. Of course, you must link with <code>unix_tcp</code> to be able to use
+<code>Unix_tcp.sockaddr</code> and register your <i>resolver</i> with this <i>type-witness</i> - and
+it's why you should expose it into your interface.
+</p>
+
+<p>
+Let's use an usual resolver:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="orgf2ac58c"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">resolve_http</span><span class="org-variable-name"> domain_name</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-keyword">match</span> <span class="org-tuareg-font-lock-module">Unix.</span>gethostbyname <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Domain_name.</span>to_string domain_name<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-keyword">with</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> <span class="org-tuareg-font-lock-module">Unix.</span>h_addr_list<span class="org-tuareg-font-lock-operator">;</span> _ <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span>
+    <span class="org-keyword">if</span> <span class="org-tuareg-font-lock-module">Array.</span>length h_addr_list <span class="org-tuareg-font-lock-operator">&gt;</span> <span class="org-highlight-numbers-number">0</span>
+    <span class="org-keyword">then</span> <span class="org-tuareg-font-lock-constructor">Some</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Unix.</span><span class="org-tuareg-font-lock-constructor">ADDR_INET</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>h_addr_list.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">(</span></span><span class="org-highlight-numbers-number">0</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">)</span></span><span class="org-tuareg-font-lock-operator">,</span> <span class="org-highlight-numbers-number">80</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+    <span class="org-keyword">else</span> <span class="org-tuareg-font-lock-constructor">None</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-keyword">exception</span> _ <span class="org-tuareg-font-lock-operator">-&gt;</span> None
+</pre>
+</div>
+
+<p>
+This <i>resolver</i> wants to usually resolve a domain-name to an HTTP
+endpoint<sup><a id="fnr.2" class="footref" href="#fn.2">2</a></sup>. Of course, you can use something else like <a href="https://github.com/mirage/ocaml-dns">ocaml-dns</a> instead
+<code>Unix.gethostbyname</code> to be compatible with MirageOS.
+</p>
+
+<p>
+Then, we must fill <code>Tuyau.resolvers</code> with our <code>resolve_http</code>:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">resolvers</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Tuyau.</span>empty
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">resolvers</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-module">Tuyau.</span>register_resolver <span class="org-tuareg-font-lock-label">~key</span><span class="org-tuareg-font-lock-operator">:</span><span class="org-tuareg-font-lock-module">Unix_tcp.</span>sockaddr resolve_http
+</pre>
+</div>
+
+<p>
+You can not do a mistake between <code>Unix_tcp.sockaddr</code> and <code>resolve_http</code>.
+<i>type-witness</i> and returned value by <code>resolve_http</code> must correspond - otherwise,
+OCaml will complain with a type error which is nice!
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgd5ac1ba" class="outline-4">
+<h4 id="orgd5ac1ba">Come back to Git!</h4>
+<div class="outline-text-4" id="text-orgd5ac1ba">
+<p>
+From the maintainer of Git's perspective, all of previous codes is outside Git.
+As we said, we don't want to depend on an implementation of TCP/IP protocol (or
+a SSH implementation). However, we should depend on Tuyau.
+</p>
+
+<p>
+Finally, the Tuyau core library defines only few things, the <code>resolvers</code> type
+and the <code>'a key</code> type. By this way, in our library we can write something like:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml" id="orgdbdc3ba"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">clone</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator">~</span><span class="org-variable-name">resolvers domain_name repository</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">payload</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Bytes.</span>create <span class="org-highlight-numbers-number">0x1000</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-module">Tuyau_unix.</span><span class="org-tuareg-font-lock-constructor">Flow</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-variable-name">flow</span><span class="org-tuareg-font-lock-operator">,</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-tuareg-font-lock-governing">module</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-module">Flow</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-operator">=</span>
+    <span class="org-tuareg-font-lock-module">Tuyau_unix.</span>resolve <span class="org-tuareg-font-lock-operator">~</span>resolvers domain_name <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-module">Flow.</span>send flow <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Fmt.</span>strf <span class="org-string">"# git-upload-pack /%s.git"</span> repository <span class="org-tuareg-font-lock-operator">;</span>
+  <span class="org-tuareg-font-lock-module">Flow.</span>recv flow payload <span class="org-tuareg-font-lock-operator">;</span>
+  <span class="org-tuareg-font-lock-operator">...</span> 
+</pre>
+</div>
+
+<p>
+Of course, we must choose a <i>backend</i> like LWT, ASYNC or UNIX to correctly deal
+with the scheduler about I/O operations. But for a MirageOS-compatible library,
+<code>Tuyau_lwt</code> should be enough.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org2bdd16c" class="outline-4">
+<h4 id="org2bdd16c">And run all of that!</h4>
+<div class="outline-text-4" id="text-org2bdd16c">
+<p>
+Come back to our <code>main.ml</code> where we filled your <code>resolvers</code>, we properly can do:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">resolve_http</span><span class="org-variable-name"> domain_name</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-keyword">match</span> <span class="org-tuareg-font-lock-module">Unix.</span>gethostbyname <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Domain_name.</span>to_string domain_name<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-keyword">with</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> <span class="org-tuareg-font-lock-module">Unix.</span>h_addr_list<span class="org-tuareg-font-lock-operator">;</span> _ <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span>
+    <span class="org-keyword">if</span> <span class="org-tuareg-font-lock-module">Array.</span>length h_addr_list <span class="org-tuareg-font-lock-operator">&gt;</span> <span class="org-highlight-numbers-number">0</span>
+    <span class="org-keyword">then</span> <span class="org-tuareg-font-lock-constructor">Some</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Unix.</span><span class="org-tuareg-font-lock-constructor">ADDR_INET</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>h_addr_list.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">(</span></span><span class="org-highlight-numbers-number">0</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">)</span></span><span class="org-tuareg-font-lock-operator">,</span> <span class="org-highlight-numbers-number">80</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+    <span class="org-keyword">else</span> <span class="org-tuareg-font-lock-constructor">None</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-keyword">exception</span> _ <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-constructor">None</span>
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">resolvers</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Tuyau.</span>empty
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">resolvers</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-module">Tuyau.</span>register_resolver <span class="org-tuareg-font-lock-label">~key</span><span class="org-tuareg-font-lock-operator">:</span><span class="org-tuareg-font-lock-module">Unix_tcp.</span>sockaddr resolve_http
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-operator">=</span>
+  clone <span class="org-tuareg-font-lock-operator">~</span>resolvers
+    <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Domain_name.</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>host_exn <span class="org-tuareg-font-lock-operator">&lt;.&gt;</span> of_string_exn<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> <span class="org-string">"github.com"</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+    <span class="org-string">"decompress"</span>
+</pre>
+</div>
+
+<p>
+Finally, we manually defined our <code>resolvers</code> by hands, we used a specific
+implementation of the TCP/IP protocol (the UNIX one) and we
+magically/dynamically plug all of that to your Git implementation through Tuyau.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgfec8bb4" class="outline-4">
+<h4 id="orgfec8bb4">Go further with composition!</h4>
+<div class="outline-text-4" id="text-orgfec8bb4">
+<p>
+Of course, we can go further and provide a TCP + TLS implementation:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">sockaddr_and_tls_config</span><span class="org-tuareg-font-lock-operator">,</span><span class="org-variable-name"> tcp_with_tls</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-module">Tuyau_tls.</span>with_tls <span class="org-tuareg-font-lock-label">~key</span><span class="org-tuareg-font-lock-operator">:</span>sockaddr <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">TCP</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+
+<p>
+The composition gives to us 2 values:
+</p>
+<ul class="org-ul">
+<li>the <i>type-witness</i> <code>sockaddr_and_tls_config : Unix.sockaddr *
+  Tls.Config.client</code>. In fact, creation of a TCP + TLS connection is a bit more
+complex than TCP. We need a <code>Tls.Config.client</code> which verify certificate
+provided by the peer.</li>
+<li>the <i>type-witness</i> <code>tcp_with_tls : Unix.file_descr with_tls</code>.</li>
+</ul>
+
+<p>
+From that, we must provide an other resolver which give to us the <code>Tls.Config.client</code>:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">resolve_https</span><span class="org-variable-name"> domain_name</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-keyword">match</span> resolve_http domain_name <span class="org-keyword">with</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Some</span> sockaddr <span class="org-tuareg-font-lock-operator">-&gt;</span>
+    <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">tls_config</span> <span class="org-tuareg-font-lock-operator">=</span>
+      <span class="org-tuareg-font-lock-module">Tls.Config.</span>client <span class="org-tuareg-font-lock-label">~authenticator</span><span class="org-tuareg-font-lock-operator">:</span><span class="org-tuareg-font-lock-module">X509.Authenticator.</span>null <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-governing">in</span>
+    <span class="org-tuareg-font-lock-constructor">Some</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>sockaddr<span class="org-tuareg-font-lock-operator">,</span> tls_config<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">None</span> <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-constructor">None</span>
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">resolvers</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-module">Tuyau.</span>register_resolver <span class="org-tuareg-font-lock-label">~priority</span><span class="org-tuareg-font-lock-operator">:</span><span class="org-highlight-numbers-number">0</span> <span class="org-tuareg-font-lock-label">~key</span><span class="org-tuareg-font-lock-operator">:</span>sockaddr_and_tls_config
+    resolve_https
+    resolvers
+</pre>
+</div>
+
+<p>
+With the priority, we can enforce to try at the first time the TCP + TLS
+transmission instead the TCP transmission - and by this way, prefer to use the
+secure one.
+</p>
+
+<p>
+Again, this code still appears outside the Git implementation. We are able to
+fill Tuyau with a SSH implementation and fill the <code>resolvers</code> with a specific
+SSH configuration (like a set of private key like <code>.ssh/config</code>).
+</p>
+
+<p>
+In our example, we use <code>X509.Authenticator.null</code> but we can restrict the
+<code>authenticator</code> to some internals certificates. Again, the way to resolve a
+domain-name is on the responsibility of the user.
+</p>
+</div>
+
+<ul class="org-ul">
+<li><a id="org15d3ac9"></a>Composition is not magic!<br>
+<div class="outline-text-5" id="text-org15d3ac9">
+<p>
+Composition with TLS or something else is not magic. It seems easy when we
+provide <code>with_tls</code> but we <b><b>wrote</b></b> the way to compose TLS with an other
+protocol - where we handled <i>handshake</i>, etc.
+</p>
+
+<p>
+The composition is, at the end, a <i>functor</i> which takes a <code>FLOW</code>:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">With_tls</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-variable-name">Flow </span><span class="org-tuareg-font-lock-operator">:</span><span class="org-type"> FLOW</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">struct</span>
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">endpoint</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Flow.</span>endpoint <span class="org-tuareg-font-lock-operator">*</span> <span class="org-tuareg-font-lock-module">Tls.Config.</span>client
+  <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">flow</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Flow.</span>endpoint <span class="org-tuareg-font-lock-operator">*</span> <span class="org-tuareg-font-lock-module">Tls.Engine.</span>state
+
+  <span class="org-tuareg-font-lock-operator">...</span>
+<span class="org-tuareg-font-lock-governing">end</span>
+</pre>
+</div>
+
+<p>
+We just hidden it with a nice function and play a bit with <a href="https://caml.inria.fr/pub/docs/manual-ocaml/firstclassmodules.html#s:first-class-modules">first-class modules</a>.
+</p>
+</div>
+</li>
+</ul>
+</div>
+
+<div id="outline-container-orge4b42e1" class="outline-4">
+<h4 id="orge4b42e1">More possibilities on the user-side</h4>
+<div class="outline-text-4" id="text-orge4b42e1">
+<p>
+One other request about <code>Tuyau</code> is to be predictable by the kind of flow used.
+Some maintainers want to enforce a secure flow such as SSH. In this case, of
+course, the maintainer should be aware about the implementation - and link with
+it.
+</p>
+
+<p>
+The <code>resolve</code> function is much more complex than before on this way:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">resolver</span>
+  <span class="org-tuareg-font-lock-operator">:</span>  resolvers
+  <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-label">?key</span><span class="org-tuareg-font-lock-operator">:</span>'edn key
+  <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-label">?protocol</span><span class="org-tuareg-font-lock-operator">:</span>'flow protocol
+  <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">[</span></span> <span class="org-tuareg-font-lock-constructor">`host</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">]</span></span> <span class="org-tuareg-font-lock-module">Domain_name.</span>t <span class="org-tuareg-font-lock-operator">-&gt;</span> flow
+</pre>
+</div>
+
+<p>
+Optional arguments let the user to enforce a specific <i>endpoint</i><sup><a id="fnr.3" class="footref" href="#fn.3">3</a></sup> or a
+specific protocol (or both). When we advised to expose <code>val tcp :
+Unix.file_descr Tuyau.protocol</code> before, it's for this case. Imagine an SSH
+implementation where a <code>val ssh : SSH.t Tuyau.protocol</code> exists, the maintainer
+can write:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">clone</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator">~</span><span class="org-variable-name">resolvers domain_name repository</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">payload</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Bytes.</span>create <span class="org-highlight-numbers-number">0x1000</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-module">Tuyau_unix.</span><span class="org-tuareg-font-lock-constructor">Flow</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-variable-name">flow</span><span class="org-tuareg-font-lock-operator">,</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-tuareg-font-lock-governing">module</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-module">Flow</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-operator">=</span>
+    <span class="org-tuareg-font-lock-module">Tuyau_unix.</span>resolve <span class="org-tuareg-font-lock-operator">~</span>resolvers <span class="org-tuareg-font-lock-label">~protocol</span><span class="org-tuareg-font-lock-operator">:</span>ssh domain_name <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-module">Flow.</span>send flow <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Fmt.</span>strf <span class="org-string">"# git-upload-pack /%s.git"</span> repository <span class="org-tuareg-font-lock-operator">;</span>
+  <span class="org-tuareg-font-lock-module">Flow.</span>recv flow payload <span class="org-tuareg-font-lock-operator">;</span>
+  <span class="org-tuareg-font-lock-operator">...</span> 
+</pre>
+</div>
+
+<p>
+By this way, we ensure to use SSH when we communicate to our peer.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orga5134b1" class="outline-3">
+<h3 id="orga5134b1">Conclusion</h3>
+<div class="outline-text-3" id="text-orga5134b1">
+<p>
+As we said, Tuyau and Conduit a complex problem when we should have an easy way
+to start a <i>transmission</i> and be able to extend protocol implementations without
+a static dependency at the library level.
+</p>
+
+<p>
+Composition is done by the possibility to give a nice interface such as
+<code>with_tls</code> with Tuyau. But, of course, it's not magic when maintainer of
+TLS/WireGuard/Noise should provide a way to compose such layers with a given
+<code>FLOW</code>.
+</p>
+
+<p>
+Finally, it's hard to really understand the goal of Tuyau when, from the
+library, it's hard to reach the global view over protocols, users and finally
+the ecosystem. This article wants to give materials about that.
+</p>
+</div>
+
+<div id="outline-container-orgf8505b9" class="outline-4">
+<h4 id="orgf8505b9">Server-side</h4>
+<div class="outline-text-4" id="text-orgf8505b9">
+<p>
+Tuyau provides something about the server-side which differs a lot from what
+Conduit does but we should explain that into an other article.
+</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" class="footnum" href="#fnr.1">1</a></sup> <div class="footpara"><p class="footpara">
+: It's not really true when a transmission over HTTP must be <i>stateless</i>.
+Smart over SSH differs too when it must expect a END-OF-LINE (<code>'\n'</code>) at the end
+of each <i>packet</i> - this character is optional over TCP/IP.
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.2" class="footnum" href="#fnr.2">2</a></sup> <div class="footpara"><p class="footpara">
+: by <i>HTTP endpoint</i>, we enforce the port <code>80</code>. Our UNIX TCP/IP flow is
+not an HTTP flow. However, an HTTP client must be connected to the port <code>80</code>
+over the TCP/IP protocol.
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.3" class="footnum" href="#fnr.3">3</a></sup> <div class="footpara"><p class="footpara">
+: A <i>type-witness</i> <code>key</code> can be used and re-used with many protocols. We
+can imagine a TCP/IP protocol and a UDP/IP protocol which use the same
+<code>sockaddr</code> <i>type-witness</i>.
+</p></div></div>
+
+
+</div>
+</div>
 <div class="headline"> <h1 class="post-title"><a href="2020-02-17--functor-magic.html">Functor, Application and magick!</a></h1>
 </div><div class="post-date"><2020-02-17></div><p>
 While I try to make an SMTP server in OCaml as an <i>unikernel</i>, I tried to deal
