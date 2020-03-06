@@ -1,7 +1,5 @@
-#+title: Tuyau
+#+title: Tuyau, the next conduit
 #+date: <2020-02-27 Thu>
-
-* Tuyau, the next conduit
 
 If you look into the MirageOS ecosystem, you should already see [[https://github.com/mirage/ocaml-conduit.git][conduit]] as a
 library used by many others projects such as [[https://github.com/mirage/ocaml-cohttp.git][cohttp]]. However, even if it is used
@@ -26,7 +24,7 @@ this way, Tuyau.
 
 It can be a good opportunity to see some strange OCaml things!
 
-** Start a /transmission/
+* Start a /transmission/
 
 In many ways, in some projects, we want to start a /transmission/ with a peer.
 We would like to communicate with it. However, we don't want to handle by hands
@@ -84,7 +82,7 @@ implementation of available protocols.
 Smart over SSH differs too when it must expect a END-OF-LINE (~'\n'~) at the end
 of each /packet/ - this character is optional over TCP/IP.
 
-** A transmission, a protocol or a flow
+* A transmission, a protocol or a flow
 
 The first bad point of Conduit is terms used by it which are not really defined.
 A transmission, a protocol or a flow are not very clear and we can not strictly
@@ -93,7 +91,7 @@ define the purpose of them with Conduit.
 Tuyau wants to be clear on these words and it gives to us a true definition of
 them. Then, we will use them as Tuyau defines them.
 
-*** A Protocol
+** A Protocol
     
 A communication protocol is a system of rules that allows entities to transmit
 information. In the case of Tuyau, this kind of information must not be
@@ -116,7 +114,7 @@ together like TCP ∘ TLS to make a new protocol. From this composition, the use
 is able to implement Secure Simple Mail Transfer Protocol (SSMTP) or HyperText
 Transfer Protocol Secure (HTTPS) - both use TCP and TLS.
 
-*** A ~FLOW~
+** A ~FLOW~
 
 To be able to do this composition, the protocol must respect (at least) an
 interface: the ~FLOW~ interface. It defines an abstract ~type t~ and functions
@@ -140,7 +138,7 @@ From a given ~FLOW~, we /wrap/ it with TLS and return a new ~FLOW~. Such a
 composition exists also for [[https://en.wikipedia.org/wiki/WireGuard][WireGuard]] or [[http://www.noiseprotocol.org/][Noise]] layers. Tuyau wants to solve
 this composition by a strict OCaml interface of the ~FLOW~.
 
-*** About Conduit
+** About Conduit
 
 These ideas already exist with ~Conduit_mirage.Flow~ and
 ~Conduit_mirage.with_tls~. However, it appears 2 problems:
@@ -151,7 +149,7 @@ Currently, Conduit delimits implementations by a polymorphic variants
 ~Conduit.{client,server}~. We should not blame that when [[https://caml.inria.fr/pub/docs/manual-ocaml/extensiblevariants.html][extensible variants]]
 appears only on OCaml 4.02.
 
-** Abstract! Abstract everything!
+* Abstract! Abstract everything!
 
 As we said, the most important idea is to be able to:
 1) abstract the /flow/
@@ -202,7 +200,7 @@ prepare the concrete value to be able to communicate with our peer. I mean,
 ~Unix.socket~. It connects the socket to our peer. It's why we talk about
 a /resolution/ process.
 
-** Resolution
+* Resolution
 
 Tuyau can not define by itself the resolution. Resolution is commonly a DNS
 resolution to get the IP from a /domain-name/. However, into an /unikernel/,
@@ -224,7 +222,7 @@ At the end, we agree that the most general (by convention) description of the
 construct an /endpoint/ from a concrete ~[`host] Domain_name.t~ (as Conduit
 decided to construct an ~Conduit.endp~ from an ~Uri.t~).
 
-*** How Conduit does that?!
+** How Conduit does that?!
 
 Conduit do the same job where it wants to construct an /endpoint/
 (~Conduit.endp~) from an ~Uri.t~. To choose which implementation we will use, it
@@ -253,7 +251,7 @@ type endp =
 type client = [ tcp_client | vchan_client | client tls_client ] 
 #+END_SRC
 
-*** Abstract, again!
+** Abstract, again!
 
 Tuyau comes with an [[https://github.com/dbuenzli/hmap][/heterogeneous/ map]] to be able to let the user to define a
 ~resolve~ function which is able to return any (structurally different)
@@ -285,7 +283,7 @@ Finally, Tuyau will execute all of your /resolvers/ and create a list of
 heterogeneous /endpoints/. Then, from them, it is able to try to start a
 transmission to your peer.
 
-**** Give me the priority
+*** Give me the priority
 
 Of course, ~resolver~ can be registered with a priority. By that, not only will
 we use your priority resolver, but we will also prioritize initialization of
@@ -294,7 +292,7 @@ your associated protocol.
 The idea is to let the user to prioritize secure transmission over /unsecure/
 transmission even if both are available (like ~https~ and ~http~).
 
-** Tuyau by an example
+* Tuyau by an example
 
 Tuyau (and Conduit) wants to solve a difficult task which does not appear into
 usual cases. If you want to make an UNIX program, all of that is useless because
@@ -309,7 +307,7 @@ We will see a little example to fully understand the underlying Tuyau stack.
 What you should do as the maintainer of Git, as the developer of the protocol or
 basically as the user of Tuyau.
 
-*** Register your protocol with Tuyau
+** Register your protocol with Tuyau
 
 To play with protocols, we must /register/ our protocol to Tuyau. The
 registration is global to your program. Indeed, Tuyau is able to extract your
@@ -358,7 +356,7 @@ where we can use it. But the registration is done into our internal & global
 ~Hashtbl.t~. Any **link** with this piece of code will make your protocol
 available through Tuyau.
 
-*** Register your resolver with Tuyau
+** Register your resolver with Tuyau
 
 Into another project/library/executable/unikernel, you are able to define your
 resolution process. Of course, you must link with ~unix_tcp~ to be able to use
@@ -398,7 +396,7 @@ OCaml will complain with a type error which is nice!
 not an HTTP flow. However, an HTTP client must be connected to the port ~80~
 over the TCP/IP protocol.
 
-*** Come back to Git!
+** Come back to Git!
 
 From the maintainer of Git's perspective, all of previous codes is outside Git.
 As we said, we don't want to depend on an implementation of TCP/IP protocol (or
@@ -422,7 +420,7 @@ Of course, we must choose a /backend/ like LWT, ASYNC or UNIX to correctly deal
 with the scheduler about I/O operations. But for a MirageOS-compatible library,
 ~Tuyau_lwt~ should be enough.
 
-*** And run all of that!
+** And run all of that!
 
 Come back to our ~main.ml~ where we filled your ~resolvers~, we properly can do:
 
@@ -449,7 +447,7 @@ Finally, we manually defined our ~resolvers~ by hands, we used a specific
 implementation of the TCP/IP protocol (the UNIX one) and we
 magically/dynamically plug all of that to your Git implementation through Tuyau.
 
-*** Go further with composition!
+** Go further with composition!
 
 Of course, we can go further and provide a TCP + TLS implementation:
 
@@ -494,7 +492,7 @@ In our example, we use ~X509.Authenticator.null~ but we can restrict the
 ~authenticator~ to some internals certificates. Again, the way to resolve a
 domain-name is on the responsibility of the user.
 
-**** Composition is not magic!
+*** Composition is not magic!
 
 Composition with TLS or something else is not magic. It seems easy when we
 provide ~with_tls~ but we **wrote** the way to compose TLS with an other
@@ -513,7 +511,7 @@ end
 
 We just hidden it with a nice function and play a bit with [[https://caml.inria.fr/pub/docs/manual-ocaml/firstclassmodules.html#s%3Afirst-class-modules][first-class modules]].
 
-*** More possibilities on the user-side
+** More possibilities on the user-side
 
 One other request about ~Tuyau~ is to be predictable by the kind of flow used.
 Some maintainers want to enforce a secure flow such as SSH. In this case, of
@@ -552,7 +550,7 @@ By this way, we ensure to use SSH when we communicate to our peer.
 can imagine a TCP/IP protocol and a UDP/IP protocol which use the same
 ~sockaddr~ /type-witness/.
 
-** Conclusion
+* Conclusion
 
 As we said, Tuyau and Conduit a complex problem when we should have an easy way
 to start a /transmission/ and be able to extend protocol implementations without
@@ -567,7 +565,7 @@ Finally, it's hard to really understand the goal of Tuyau when, from the
 library, it's hard to reach the global view over protocols, users and finally
 the ecosystem. This article wants to give materials about that.
 
-*** Server-side
+** Server-side
 
 Tuyau provides something about the server-side which differs a lot from what
 Conduit does but we should explain that into an other article.

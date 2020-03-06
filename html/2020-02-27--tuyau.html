@@ -6,7 +6,7 @@
       type="application/rss+xml"
       href="https://blog.x25519.net/rss.xml"
       title="RSS feed for https://blog.x25519.net/"/>
-<title>Tuyau</title>
+<title>Tuyau, the next conduit</title>
 <meta  name="author" content="dinosaure" />
 <link href= "static/style.css" rel="stylesheet" type="text/css" />
 <meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8" />
@@ -17,12 +17,8 @@
   <a href="https://blog.x25519.net">dinosaure's Blog</a>
 </div></div>
 <div id="content">
-<div class="headline"> <h1 class="post-title"><a href="2020-02-27--tuyau.html">Tuyau</a></h1>
-</div><div class="post-date"><2020-02-27></div>
-<div id="outline-container-orgb5d066c" class="outline-2">
-<h2 id="orgb5d066c">Tuyau, the next conduit</h2>
-<div class="outline-text-2" id="text-orgb5d066c">
-<p>
+<div class="headline"> <h1 class="post-title"><a href="2020-02-27--tuyau.html">Tuyau, the next conduit</a></h1>
+</div><div class="post-date"><2020-02-27></div><p>
 If you look into the MirageOS ecosystem, you should already see <a href="https://github.com/mirage/ocaml-conduit.git">conduit</a> as a
 library used by many others projects such as <a href="https://github.com/mirage/ocaml-cohttp.git">cohttp</a>. However, even if it is used
 by these projects, at this time, nobody can really explain the goal of Conduit.
@@ -58,11 +54,10 @@ this way, Tuyau.
 <p>
 It can be a good opportunity to see some strange OCaml things!
 </p>
-</div>
 
-<div id="outline-container-orgbff6875" class="outline-3">
-<h3 id="orgbff6875">Start a <i>transmission</i></h3>
-<div class="outline-text-3" id="text-orgbff6875">
+<div id="outline-container-org2cc56df" class="outline-2">
+<h2 id="org2cc56df">Start a <i>transmission</i></h2>
+<div class="outline-text-2" id="text-org2cc56df">
 <p>
 In many ways, in some projects, we want to start a <i>transmission</i> with a peer.
 We would like to communicate with it. However, we don't want to handle by hands
@@ -123,7 +118,7 @@ Finally, we want something like:
 </p>
 
 <div class="org-src-container">
-<pre class="src src-ocaml" id="org7dbdf8f"><span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">resolve</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-module">Tuyau.</span>t <span class="org-tuareg-font-lock-operator">-&gt;</span> uri <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-module">Unix.</span>socket
+<pre class="src src-ocaml" id="org21254c0"><span class="org-tuareg-font-lock-governing">val</span> <span class="org-function-name">resolve</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-module">Tuyau.</span>t <span class="org-tuareg-font-lock-operator">-&gt;</span> uri <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-module">Unix.</span>socket
 </pre>
 </div>
 
@@ -141,9 +136,9 @@ implementation of available protocols.
 </div>
 </div>
 
-<div id="outline-container-orga2b95f1" class="outline-3">
-<h3 id="orga2b95f1">A transmission, a protocol or a flow</h3>
-<div class="outline-text-3" id="text-orga2b95f1">
+<div id="outline-container-orga644f4b" class="outline-2">
+<h2 id="orga644f4b">A transmission, a protocol or a flow</h2>
+<div class="outline-text-2" id="text-orga644f4b">
 <p>
 The first bad point of Conduit is terms used by it which are not really defined.
 A transmission, a protocol or a flow are not very clear and we can not strictly
@@ -156,9 +151,9 @@ them. Then, we will use them as Tuyau defines them.
 </p>
 </div>
 
-<div id="outline-container-org3772ffe" class="outline-4">
-<h4 id="org3772ffe">A Protocol</h4>
-<div class="outline-text-4" id="text-org3772ffe">
+<div id="outline-container-orgdfc4565" class="outline-3">
+<h3 id="orgdfc4565">A Protocol</h3>
+<div class="outline-text-3" id="text-orgdfc4565">
 <p>
 A communication protocol is a system of rules that allows entities to transmit
 information. In the case of Tuyau, this kind of information must not be
@@ -190,9 +185,9 @@ Transfer Protocol Secure (HTTPS) - both use TCP and TLS.
 </div>
 </div>
 
-<div id="outline-container-org6c85402" class="outline-4">
-<h4 id="org6c85402">A <code>FLOW</code></h4>
-<div class="outline-text-4" id="text-org6c85402">
+<div id="outline-container-org20ea808" class="outline-3">
+<h3 id="org20ea808">A <code>FLOW</code></h3>
+<div class="outline-text-3" id="text-org20ea808">
 <p>
 To be able to do this composition, the protocol must respect (at least) an
 interface: the <code>FLOW</code> interface. It defines an abstract <code>type t</code> and functions
@@ -226,9 +221,9 @@ this composition by a strict OCaml interface of the <code>FLOW</code>.
 </div>
 </div>
 
-<div id="outline-container-orge20d52e" class="outline-4">
-<h4 id="orge20d52e">About Conduit</h4>
-<div class="outline-text-4" id="text-orge20d52e">
+<div id="outline-container-org16d626b" class="outline-3">
+<h3 id="org16d626b">About Conduit</h3>
+<div class="outline-text-3" id="text-org16d626b">
 <p>
 These ideas already exist with <code>Conduit_mirage.Flow</code> and
 <code>Conduit_mirage.with_tls</code>. However, it appears 2 problems:
@@ -247,9 +242,9 @@ appears only on OCaml 4.02.
 </div>
 </div>
 
-<div id="outline-container-orgc028d4c" class="outline-3">
-<h3 id="orgc028d4c">Abstract! Abstract everything!</h3>
-<div class="outline-text-3" id="text-orgc028d4c">
+<div id="outline-container-org1077c90" class="outline-2">
+<h2 id="org1077c90">Abstract! Abstract everything!</h2>
+<div class="outline-text-2" id="text-org1077c90">
 <p>
 As we said, the most important idea is to be able to:
 </p>
@@ -318,9 +313,9 @@ a <i>resolution</i> process.
 </div>
 </div>
 
-<div id="outline-container-org66e7d1c" class="outline-3">
-<h3 id="org66e7d1c">Resolution</h3>
-<div class="outline-text-3" id="text-org66e7d1c">
+<div id="outline-container-org21687a2" class="outline-2">
+<h2 id="org21687a2">Resolution</h2>
+<div class="outline-text-2" id="text-org21687a2">
 <p>
 Tuyau can not define by itself the resolution. Resolution is commonly a DNS
 resolution to get the IP from a <i>domain-name</i>. However, into an <i>unikernel</i>,
@@ -350,9 +345,9 @@ decided to construct an <code>Conduit.endp</code> from an <code>Uri.t</code>).
 </p>
 </div>
 
-<div id="outline-container-org37a67ab" class="outline-4">
-<h4 id="org37a67ab">How Conduit does that?!</h4>
-<div class="outline-text-4" id="text-org37a67ab">
+<div id="outline-container-org0400bb9" class="outline-3">
+<h3 id="org0400bb9">How Conduit does that?!</h3>
+<div class="outline-text-3" id="text-org0400bb9">
 <p>
 Conduit do the same job where it wants to construct an <i>endpoint</i>
 (<code>Conduit.endp</code>) from an <code>Uri.t</code>. To choose which implementation we will use, it
@@ -391,9 +386,9 @@ are delimited by an exhaustive list of constructors:
 </div>
 </div>
 
-<div id="outline-container-org8d03ac1" class="outline-4">
-<h4 id="org8d03ac1">Abstract, again!</h4>
-<div class="outline-text-4" id="text-org8d03ac1">
+<div id="outline-container-org28294f3" class="outline-3">
+<h3 id="org28294f3">Abstract, again!</h3>
+<div class="outline-text-3" id="text-org28294f3">
 <p>
 Tuyau comes with an <a href="https://github.com/dbuenzli/hmap"><i>heterogeneous</i> map</a> to be able to let the user to define a
 <code>resolve</code> function which is able to return any (structurally different)
@@ -434,9 +429,9 @@ transmission to your peer.
 </p>
 </div>
 
-<ul class="org-ul">
-<li><a id="orga5cdaea"></a>Give me the priority<br>
-<div class="outline-text-5" id="text-orga5cdaea">
+<div id="outline-container-org021f26d" class="outline-4">
+<h4 id="org021f26d">Give me the priority</h4>
+<div class="outline-text-4" id="text-org021f26d">
 <p>
 Of course, <code>resolver</code> can be registered with a priority. By that, not only will
 we use your priority resolver, but we will also prioritize initialization of
@@ -448,14 +443,13 @@ The idea is to let the user to prioritize secure transmission over <i>unsecure</
 transmission even if both are available (like <code>https</code> and <code>http</code>).
 </p>
 </div>
-</li>
-</ul>
+</div>
 </div>
 </div>
 
-<div id="outline-container-orgc2ef22e" class="outline-3">
-<h3 id="orgc2ef22e">Tuyau by an example</h3>
-<div class="outline-text-3" id="text-orgc2ef22e">
+<div id="outline-container-org5f3f18d" class="outline-2">
+<h2 id="org5f3f18d">Tuyau by an example</h2>
+<div class="outline-text-2" id="text-org5f3f18d">
 <p>
 Tuyau (and Conduit) wants to solve a difficult task which does not appear into
 usual cases. If you want to make an UNIX program, all of that is useless because
@@ -476,9 +470,9 @@ basically as the user of Tuyau.
 </p>
 </div>
 
-<div id="outline-container-orga00f51f" class="outline-4">
-<h4 id="orga00f51f">Register your protocol with Tuyau</h4>
-<div class="outline-text-4" id="text-orga00f51f">
+<div id="outline-container-org8f4860c" class="outline-3">
+<h3 id="org8f4860c">Register your protocol with Tuyau</h3>
+<div class="outline-text-3" id="text-org8f4860c">
 <p>
 To play with protocols, we must <i>register</i> our protocol to Tuyau. The
 registration is global to your program. Indeed, Tuyau is able to extract your
@@ -490,7 +484,7 @@ Let's start to provide an UNIX TCP/IP protocol and register it into Tuyau!
 </p>
 
 <div class="org-src-container">
-<pre class="src src-ocaml" id="org95ed791"><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">TCP</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">struct</span>
+<pre class="src src-ocaml" id="org4f8e63f"><span class="org-tuareg-font-lock-governing">module</span> <span class="org-tuareg-font-lock-module">TCP</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-governing">struct</span>
   <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">flow</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>file_descr
   <span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">endpoint</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>sockaddr
 
@@ -541,9 +535,9 @@ available through Tuyau.
 </div>
 </div>
 
-<div id="outline-container-orgfcfc9ca" class="outline-4">
-<h4 id="orgfcfc9ca">Register your resolver with Tuyau</h4>
-<div class="outline-text-4" id="text-orgfcfc9ca">
+<div id="outline-container-org43097ab" class="outline-3">
+<h3 id="org43097ab">Register your resolver with Tuyau</h3>
+<div class="outline-text-3" id="text-org43097ab">
 <p>
 Into another project/library/executable/unikernel, you are able to define your
 resolution process. Of course, you must link with <code>unix_tcp</code> to be able to use
@@ -556,7 +550,7 @@ Let's use an usual resolver:
 </p>
 
 <div class="org-src-container">
-<pre class="src src-ocaml" id="orgf2ac58c"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">resolve_http</span><span class="org-variable-name"> domain_name</span> <span class="org-tuareg-font-lock-operator">=</span>
+<pre class="src src-ocaml" id="org361d4bf"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">resolve_http</span><span class="org-variable-name"> domain_name</span> <span class="org-tuareg-font-lock-operator">=</span>
   <span class="org-keyword">match</span> <span class="org-tuareg-font-lock-module">Unix.</span>gethostbyname <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Domain_name.</span>to_string domain_name<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-keyword">with</span>
   <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> <span class="org-tuareg-font-lock-module">Unix.</span>h_addr_list<span class="org-tuareg-font-lock-operator">;</span> _ <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span>
     <span class="org-keyword">if</span> <span class="org-tuareg-font-lock-module">Array.</span>length h_addr_list <span class="org-tuareg-font-lock-operator">&gt;</span> <span class="org-highlight-numbers-number">0</span>
@@ -591,9 +585,9 @@ OCaml will complain with a type error which is nice!
 </div>
 </div>
 
-<div id="outline-container-orgd5ac1ba" class="outline-4">
-<h4 id="orgd5ac1ba">Come back to Git!</h4>
-<div class="outline-text-4" id="text-orgd5ac1ba">
+<div id="outline-container-org9a7451e" class="outline-3">
+<h3 id="org9a7451e">Come back to Git!</h3>
+<div class="outline-text-3" id="text-org9a7451e">
 <p>
 From the maintainer of Git's perspective, all of previous codes is outside Git.
 As we said, we don't want to depend on an implementation of TCP/IP protocol (or
@@ -606,7 +600,7 @@ and the <code>'a key</code> type. By this way, in our library we can write somet
 </p>
 
 <div class="org-src-container">
-<pre class="src src-ocaml" id="orgdbdc3ba"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">clone</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator">~</span><span class="org-variable-name">resolvers domain_name repository</span> <span class="org-tuareg-font-lock-operator">=</span>
+<pre class="src src-ocaml" id="org5b29b3c"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">clone</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator">~</span><span class="org-variable-name">resolvers domain_name repository</span> <span class="org-tuareg-font-lock-operator">=</span>
   <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">payload</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Bytes.</span>create <span class="org-highlight-numbers-number">0x1000</span> <span class="org-tuareg-font-lock-governing">in</span>
   <span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-module">Tuyau_unix.</span><span class="org-tuareg-font-lock-constructor">Flow</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-variable-name">flow</span><span class="org-tuareg-font-lock-operator">,</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-tuareg-font-lock-governing">module</span><span class="org-variable-name"> </span><span class="org-tuareg-font-lock-module">Flow</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-operator">=</span>
     <span class="org-tuareg-font-lock-module">Tuyau_unix.</span>resolve <span class="org-tuareg-font-lock-operator">~</span>resolvers domain_name <span class="org-tuareg-font-lock-governing">in</span>
@@ -624,9 +618,9 @@ with the scheduler about I/O operations. But for a MirageOS-compatible library,
 </div>
 </div>
 
-<div id="outline-container-org2bdd16c" class="outline-4">
-<h4 id="org2bdd16c">And run all of that!</h4>
-<div class="outline-text-4" id="text-org2bdd16c">
+<div id="outline-container-orge90f6fb" class="outline-3">
+<h3 id="orge90f6fb">And run all of that!</h3>
+<div class="outline-text-3" id="text-orge90f6fb">
 <p>
 Come back to our <code>main.ml</code> where we filled your <code>resolvers</code>, we properly can do:
 </p>
@@ -659,9 +653,9 @@ magically/dynamically plug all of that to your Git implementation through Tuyau.
 </div>
 </div>
 
-<div id="outline-container-orgfec8bb4" class="outline-4">
-<h4 id="orgfec8bb4">Go further with composition!</h4>
-<div class="outline-text-4" id="text-orgfec8bb4">
+<div id="outline-container-org84c5a9b" class="outline-3">
+<h3 id="org84c5a9b">Go further with composition!</h3>
+<div class="outline-text-3" id="text-org84c5a9b">
 <p>
 Of course, we can go further and provide a TCP + TLS implementation:
 </p>
@@ -722,9 +716,9 @@ domain-name is on the responsibility of the user.
 </p>
 </div>
 
-<ul class="org-ul">
-<li><a id="org15d3ac9"></a>Composition is not magic!<br>
-<div class="outline-text-5" id="text-org15d3ac9">
+<div id="outline-container-orge4629ec" class="outline-4">
+<h4 id="orge4629ec">Composition is not magic!</h4>
+<div class="outline-text-4" id="text-orge4629ec">
 <p>
 Composition with TLS or something else is not magic. It seems easy when we
 provide <code>with_tls</code> but we <b><b>wrote</b></b> the way to compose TLS with an other
@@ -749,13 +743,12 @@ The composition is, at the end, a <i>functor</i> which takes a <code>FLOW</code>
 We just hidden it with a nice function and play a bit with <a href="https://caml.inria.fr/pub/docs/manual-ocaml/firstclassmodules.html#s:first-class-modules">first-class modules</a>.
 </p>
 </div>
-</li>
-</ul>
+</div>
 </div>
 
-<div id="outline-container-orge4b42e1" class="outline-4">
-<h4 id="orge4b42e1">More possibilities on the user-side</h4>
-<div class="outline-text-4" id="text-orge4b42e1">
+<div id="outline-container-orgb7815fd" class="outline-3">
+<h3 id="orgb7815fd">More possibilities on the user-side</h3>
+<div class="outline-text-3" id="text-orgb7815fd">
 <p>
 One other request about <code>Tuyau</code> is to be predictable by the kind of flow used.
 Some maintainers want to enforce a secure flow such as SSH. In this case, of
@@ -802,9 +795,9 @@ By this way, we ensure to use SSH when we communicate to our peer.
 </div>
 </div>
 
-<div id="outline-container-orga5134b1" class="outline-3">
-<h3 id="orga5134b1">Conclusion</h3>
-<div class="outline-text-3" id="text-orga5134b1">
+<div id="outline-container-org2c012de" class="outline-2">
+<h2 id="org2c012de">Conclusion</h2>
+<div class="outline-text-2" id="text-org2c012de">
 <p>
 As we said, Tuyau and Conduit a complex problem when we should have an easy way
 to start a <i>transmission</i> and be able to extend protocol implementations without
@@ -825,14 +818,13 @@ the ecosystem. This article wants to give materials about that.
 </p>
 </div>
 
-<div id="outline-container-orgf8505b9" class="outline-4">
-<h4 id="orgf8505b9">Server-side</h4>
-<div class="outline-text-4" id="text-orgf8505b9">
+<div id="outline-container-org2ac6f64" class="outline-3">
+<h3 id="org2ac6f64">Server-side</h3>
+<div class="outline-text-3" id="text-org2ac6f64">
 <p>
 Tuyau provides something about the server-side which differs a lot from what
 Conduit does but we should explain that into an other article.
 </p>
-</div>
 </div>
 </div>
 </div>
