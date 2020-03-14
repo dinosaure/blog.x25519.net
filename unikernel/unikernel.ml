@@ -70,10 +70,10 @@ module Make
                       ; "connection", "close" ] in
       let response = Response.create ~headers `OK in
       Reqd.respond_with_string reqd response contents ;
-      log console "%a (as application/rss+xml) delivered!" Fpath.pp key
+      log console "%a (as image/png) delivered!" Fpath.pp key
     | Some _, _ ->
       respond_404 key reqd ;
-      log console "Invalid %a resource." Fpath.pp key
+      log console "Invalid %a resource (extension: %s)." Fpath.pp key (Fpath.get_ext key)
 
   let reload console store remote =
     Sync.pull store remote `Set >>= function
