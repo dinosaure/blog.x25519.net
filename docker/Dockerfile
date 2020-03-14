@@ -5,7 +5,6 @@ RUN opam install -y conf-libev mirage
 RUN mkdir /home/opam/blog.x25519.net
 RUN git clone https://github.com/dinosaure/blog.x25519.net.git /home/opam/blog.x25519.net
 WORKDIR /home/opam/blog.x25519.net/unikernel
-RUN git checkout fix-blog
 RUN opam config exec -- mirage configure -t hvt
 RUN make depends
 RUN opam config exec -- mirage build
