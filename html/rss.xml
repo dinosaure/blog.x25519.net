@@ -4,7 +4,330 @@
 <title>x25519.net</title>
 <description>x25519.net</description>
 <link>https://blog.x25519.net/</link>
-<lastBuildDate>Fri, 06 Mar 2020 18:05:59 +0100</lastBuildDate>
+<lastBuildDate>Sat, 14 Mar 2020 17:34:07 +0100</lastBuildDate>
+<item>
+  <title>Eq(af), timing attack!</title>
+  <description><![CDATA[
+</div><div class="post-date"><2020-03-14></div><p>
+The MirageOS project is aware about security issues. This goal is strong when,
+at the beginning, the idea of a small <i>unikernel</i> can ensure (by intuition) a
+small attack surface. By this way, we want to follow as possible as we can
+improvements into security stacks such as TLS.
+</p>
+
+<p>
+Of course, we are not a huge team and some of us don't have a strong knowledge
+about security. This topic is highly complex and it's easy to think that we are
+secure - and, by facts, we are not. However, it gives to us an opportunity to
+learn and improve what we can find about this topic and go on our way to try to
+provide the best as we can.
+</p>
+
+<p>
+This article wants to show a little project which wants to solve a security
+issue, the timing attack. We will see what we did on this purpose at the
+beginning and recently to be able to improve <a href="https://github.com/mirage/mirage-crypto/">mirage-crypto</a>.
+</p>
+
+<div id="outline-container-orgbe91f22" class="outline-2">
+<h2 id="orgbe91f22">A timing attack!</h2>
+<div class="outline-text-2" id="text-orgbe91f22">
+<p>
+It's clearly not an usual attack for me and I did not (yet!) understand in which
+way it's possible to use this side-channel attack over a complex black-box such
+as an SMTP service. However, the first lesson about security is to agree with
+the fact that when you can imagine this attack (even if, by your technical
+means, it's not possible), someone else into our world has the ability to use
+this attack.
+</p>
+
+<p>
+The point is not to try to think how this kind of attack is possible but to
+assert that this attack <b><b>is</b></b> possible.
+</p>
+
+<p>
+The timing attack is in this case where we use the time to try to introspect
+data such as a password. The idea is simple, we can take this simple <code>equal</code>
+function:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">equal</span><span class="org-variable-name"> s1 s2</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">res</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-builtin">ref</span> <span class="org-constant">true</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">idx</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-builtin">ref</span> <span class="org-highlight-numbers-number">0</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-keyword">if</span> <span class="org-tuareg-font-lock-module">String.</span>length s1 <span class="org-tuareg-font-lock-operator">&lt;&gt;</span> <span class="org-tuareg-font-lock-module">String.</span>length s2
+  <span class="org-keyword">then</span> <span class="org-constant">false</span>
+  <span class="org-keyword">else</span>
+    <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span> <span class="org-keyword">while</span> <span class="org-tuareg-font-lock-operator">!</span>idx <span class="org-tuareg-font-lock-operator">&lt;</span> <span class="org-tuareg-font-lock-module">String.</span>length s1 <span class="org-tuareg-font-lock-operator">&amp;&amp;</span> <span class="org-tuareg-font-lock-operator">!</span>res
+      <span class="org-keyword">do</span> res <span class="org-tuareg-font-lock-operator">:=</span> s1.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span><span class="org-tuareg-font-lock-operator">!</span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">=</span> s2.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span><span class="org-tuareg-font-lock-operator">!</span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">;</span> incr idx <span class="org-keyword">done</span> <span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator">!</span>res <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+
+<p>
+If we are in the case where we want to compare the given password by the user
+and the password stored into our database (or their hashes), we will use this
+function - and allow the user to enter into a <i>secured</i> area.
+</p>
+
+<p>
+However, we can see that the time spent by <code>equal</code> depends on given inputs <code>s1</code>
+and <code>s2</code>.
+</p>
+</div>
+
+<div id="outline-container-org20f2cd1" class="outline-3">
+<h3 id="org20f2cd1">The worst case.</h3>
+<div class="outline-text-3" id="text-org20f2cd1">
+<p>
+Imagine that the atomic operation <code>s1.[!idx]</code> (or <code>s2.[!idx]</code>) spend 1 second
+(like 1 <i>CPU tick</i>). So, for each iteration into our loop, we will spend 2
+seconds <i>while <code>!res</code> still is <code>true</code></i>. That means when we meet 2 different
+bytes, we leave the loop<sup><a id="fnr.1" class="footref" href="#fn.1">1</a></sup>.
+</p>
+
+<p>
+Now, imagine we have these values:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-operator">#</span> equal <span class="org-string">"aabb"</span> <span class="org-string">"aaaa"</span> <span class="org-tuareg-font-double-colon">;;</span>
+</pre>
+</div>
+
+<p>
+We can easily infer that this function will spend 6 seconds (2 seconds for first
+characters, 2 seconds for second characters, 2 seconds for third characters and
+we leave the loop). And about equal values such as:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-operator">#</span> equal <span class="org-string">"toto"</span> <span class="org-string">"toto"</span> <span class="org-tuareg-font-double-colon">;;</span>
+</pre>
+</div>
+
+<p>
+We will spend 8 seconds (and return <code>true</code>). The time needed to compute the
+<code>equal</code> function depends on given inputs. By this way, if we observe time needed
+to be authenticated from a <i>login</i> page, we can infer values given into the
+<code>equal</code> function.
+</p>
+
+<p>
+Finally, from that fact, imagine that <code>s1</code> is the given password by us and <code>s2</code>
+is the password stored into our database, we can infer just with the time if we
+are close to be equal to the password stored into our database.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org4a2a402" class="outline-3">
+<h3 id="org4a2a402">A smart brute-force attack.</h3>
+<div class="outline-text-3" id="text-org4a2a402">
+<p>
+So now we can imagine a tool which will try all possibilities. It will record
+times spent for each random inputs. Then, when it appears that from an input
+<code>t0</code>, time spent differs (is lower than) from an input <code>t1</code>, we can imply that
+our <code>equal</code> function go a bit further when it scanned our input <code>t1</code> (than
+<code>t0</code>).
+</p>
+
+<p>
+By this fact, we can imply that <code>t1</code> is more close to the expected password than
+<code>t0</code> and we can redo the same operation but with a new base <code>t1</code> - and by this
+way, discard all others next (and useless) possibilities with <code>t0</code> as a base.
+</p>
+
+<p>
+Eq(af) gives to you an example of this attack. Of course, we plugged into our
+operations an <code>Unix.sleep</code> to be able to see a real difference when we call our
+<code>equal</code> function. Finally, the result is pretty good:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh">$ dune exec attack/attack.exe
+Random: <span class="org-rainbow-delimiters-depth-1">[</span>|<span class="org-highlight-numbers-number">253</span>;<span class="org-highlight-numbers-number">164</span>;<span class="org-highlight-numbers-number">168</span>;<span class="org-highlight-numbers-number">66</span>;<span class="org-highlight-numbers-number">47</span>;<span class="org-highlight-numbers-number">219</span>;<span class="org-highlight-numbers-number">88</span>;<span class="org-highlight-numbers-number">152</span>;<span class="org-highlight-numbers-number">128</span>;<span class="org-highlight-numbers-number">242</span>;<span class="org-highlight-numbers-number">216</span>;<span class="org-highlight-numbers-number">123</span>;|<span class="org-rainbow-delimiters-depth-1">]</span>.
+<span class="org-highlight-numbers-number">7c8ceadc51d33cadc97cce73fc7c86a1</span>
+<span class="org-highlight-numbers-number">7c8ceadc51d33cadc97cce73fc7c86a1</span>
+</pre>
+</div>
+
+<p>
+The second line is the expected hash, the third line is the hash found only by
+an introspection of the time. The first line is the seed given by the random to
+be able to replicate the result. This tool does not work all the time!
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgbcb0c7a" class="outline-2">
+<h2 id="orgbcb0c7a">Too deep to be dangerous?</h2>
+<div class="outline-text-2" id="text-orgbcb0c7a">
+<p>
+Of course, into the real world, our <code>equal</code> function is much much much more fast
+than some seconds. However, even if it can be hard to track how long <code>equal</code>
+spend, it's not impossible. I mean, it's a bit hard but a way exists to know how
+long any function spend.
+</p>
+
+<p>
+This way is the <i>micro</i>-benchmark! Of course, when you want to compare speed of
+your functions, you introspect time! So if we can do that usually to check which
+function is faster than the other, we can apply the idea of the benchmark on two
+call of the same <code>equal</code> function but with different inputs.
+</p>
+</div>
+
+<div id="outline-container-orgd0f65c9" class="outline-3">
+<h3 id="orgd0f65c9">Eq(af) does the test for you</h3>
+<div class="outline-text-3" id="text-orgd0f65c9">
+<p>
+So, our distribution comes with a little benchmark tool which wants to see how
+long <code>equal</code> spend when we give to it 2 different values and 2 equal values.
+Then, we <i>extrapolate</i> results.
+</p>
+
+<p>
+We <i>run</i> this function 1 time, 2 times, 3 times, &#x2026; to 3000 times and we record
+times for each run. From that, we are able to plot a curve. So about expected
+results:
+</p>
+
+<ul class="org-ul">
+<li>If our curve is a line, that means for each <i>run</i>, we spend the same time
+whatever inputs.</li>
+</ul>
+
+
+<figure id="org2fd85e4">
+<img src="static/eqaf_01.png" alt="eqaf_01.png">
+
+<figcaption><span class="figure-number">Figure 1: </span>A good curve</figcaption>
+</figure>
+
+<ul class="org-ul">
+<li>If our curves is not exactly a line, that means time spent depends on inputs</li>
+</ul>
+
+
+<figure id="org222f410">
+<img src="static/eqaf_02.png" alt="eqaf_02.png">
+
+<figcaption><span class="figure-number">Figure 2: </span>A bad curve</figcaption>
+</figure>
+
+<p>
+So from this curve, we apply a <i>linear-regression</i> to see if it's a line or not.
+From that, we can get a <code>R²</code> which is a regression coefficient and it tells to
+us if it's a <i>true</i> line (where <code>R² &gt;= 0.99</code>) or not.
+</p>
+
+<p>
+As you can see, we have some noises (some points are not strictly aligned) -
+it's because the inherent volatility when we want to record the time. It's why
+we need to apply a <i>linear-regression</i> to delete as much as possible this noise.
+An other factor about that is the context where you execute your function, the
+scheduler can decide to stop our <code>equal</code> function and do something else (but our
+<code>equal</code> function still spends his time). Finally, it still is hard to track the
+time.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgc5c8733" class="outline-2">
+<h2 id="orgc5c8733">How to fix it?</h2>
+<div class="outline-text-2" id="text-orgc5c8733">
+<p>
+The easiest way to avoid this side-channel attack is to spend exactly the same
+time for any inputs. At the end, even if we encounter different bytes, we will
+continue to scan inputs.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">equal</span><span class="org-variable-name"> s1 s2</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-keyword">if</span> <span class="org-tuareg-font-lock-module">String.</span>length s1 <span class="org-tuareg-font-lock-operator">&lt;&gt;</span> <span class="org-tuareg-font-lock-module">String.</span>length s2 <span class="org-keyword">then</span> <span class="org-constant">false</span>
+  <span class="org-keyword">else</span>
+    <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span> <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">res</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-builtin">ref</span> <span class="org-constant">true</span> <span class="org-tuareg-font-lock-governing">in</span>
+      <span class="org-keyword">while</span> <span class="org-tuareg-font-lock-operator">!</span>idx <span class="org-tuareg-font-lock-operator">&lt;</span> <span class="org-tuareg-font-lock-module">String.</span>length s1
+      <span class="org-keyword">do</span> res <span class="org-tuareg-font-lock-operator">:=</span> s1.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span><span class="org-tuareg-font-lock-operator">!</span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">=</span> s2.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span><span class="org-tuareg-font-lock-operator">!</span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">&amp;&amp;</span> <span class="org-tuareg-font-lock-operator">!</span>res <span class="org-keyword">done</span> <span class="org-tuareg-font-lock-operator">;</span>
+      <span class="org-tuareg-font-lock-operator">!</span>res <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+</div>
+
+<div id="outline-container-org10027f7" class="outline-3">
+<h3 id="org10027f7">Into the OCaml side!</h3>
+<div class="outline-text-3" id="text-org10027f7">
+<p>
+However, into the OCaml world, the deal can be much more complex that what we
+can imagine. Even if it's <i>easy</i> to translate an OCaml code to an assembly code,
+the compiler can emit some <i>jump</i> and produce a <i>non constant-time</i> (or
+a non <i>branch-less</i>) function at the end.
+</p>
+
+<p>
+For example, in our example, the only idea to use <code>None</code> and <code>Some</code> instead
+<code>false</code> and <code>true</code> into our code implies a call to the garbage collector - and a
+<i>jump</i> in the emitted assembly. This case appear when we want to implement
+<code>compare</code> and keep somewhere (into our <code>int option</code>) the subtraction of
+different bytes while the loop.
+</p>
+
+<p>
+Into Eq(af), we did a huge introspection about the assembly generated to ensure
+that we don't have any <i>jump</i> and any assembly instructions will be executed
+regardless inputs - and only from that we can say that our function is
+<i>constant-time</i><sup><a id="fnr.2" class="footref" href="#fn.2">2</a></sup>.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgdcf7271" class="outline-2">
+<h2 id="orgdcf7271">Conclusion</h2>
+<div class="outline-text-2" id="text-orgdcf7271">
+<p>
+Eq(af) provides a quite easy function and anybody can re-implement it. But it
+comes with tools which want to check our assumption, the time spent can not leak
+any information. Or course, as we showed, it can be hard to check that.
+</p>
+
+<p>
+We have different tools to check/prove that where, at this time, we only do a
+check but we can go further by an introspection of the emitted code by an other
+tool to see if are surely <i>branch-less</i>.
+</p>
+
+<p>
+At the end, Eq(af) is used by some people who are aware about security issues
+and it's why we decided to use it as a default into <a href="https://github.com/mirage/digestif/">digestif</a> to protect any
+users from this side-channel attack.
+</p>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" class="footnum" href="#fnr.1">1</a></sup> <div class="footpara"><p class="footpara">
+: In C, the case appears when we <code>return false</code> directly which is a jump
+and leaves the loop as we do in OCaml.
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.2" class="footnum" href="#fnr.2">2</a></sup> <div class="footpara"><p class="footpara">
+: <i>constant-time</i> is not a good word where it can have an other
+signification when we talk about complexity and algorithm. And it's not really
+true when the time still depends on the length of the given input.
+</p></div></div>
+
+
+</div>
+</div>]]></description>
+  <link>https://blog.x25519.net/2020-03-14--eqaf-release.html</link>
+  <pubDate>Sat, 14 Mar 2020 01:00:00 +0100</pubDate>
+</item>
 <item>
   <title>Tuyau, the next conduit</title>
   <description><![CDATA[
