@@ -1,9 +1,10 @@
 module Make
     (Console : Mirage_console.S)
+    (Time : Mirage_time.S)
     (StackV4 : Mirage_stack.V4)
     (Resolver : Resolver_lwt.S)
     (Conduit : Conduit_mirage.S) = struct
-  module Paf = Paf.Make(StackV4)
+  module Paf = Paf.Make(Time)(StackV4)
   module TCP = Paf.TCP
 
   module Store = Irmin_mirage_git.Mem.KV(Irmin.Contents.String)
@@ -131,7 +132,7 @@ module Make
     | Ok x -> f x
     | Error err -> Lwt.return (Error err)
 
-  let start console stack resolver conduit =
+  let start console time stack resolver conduit =
     connect_store resolver conduit >>= fun (store, remote) ->
     Sync.pull store remote `Set >>= function
     | Error (`Msg err) -> failwith err
@@ -140,6 +141,7 @@ module Make
       let config =
         { Tuyau_mirage_tcp.port= Key_gen.port ()
         ; Tuyau_mirage_tcp.keepalive= None
+        ; Tuyau_mirage_tcp.nodelay= false
         ; Tuyau_mirage_tcp.stack } in
       let request_handler = request_handler console remote store in
       let fiber () =
