@@ -39,9 +39,9 @@ issue, the timing attack. We will see what we did on this purpose at the
 beginning and recently to be able to improve <a href="https://github.com/mirage/mirage-crypto/">mirage-crypto</a>.
 </p>
 
-<div id="outline-container-orgbe91f22" class="outline-2">
-<h2 id="orgbe91f22">A timing attack!</h2>
-<div class="outline-text-2" id="text-orgbe91f22">
+<div id="outline-container-org694788d" class="outline-2">
+<h2 id="org694788d">A timing attack!</h2>
+<div class="outline-text-2" id="text-org694788d">
 <p>
 It's clearly not an usual attack for me and I did not (yet!) understand in which
 way it's possible to use this side-channel attack over a complex black-box such
@@ -86,9 +86,9 @@ and <code>s2</code>.
 </p>
 </div>
 
-<div id="outline-container-org20f2cd1" class="outline-3">
-<h3 id="org20f2cd1">The worst case.</h3>
-<div class="outline-text-3" id="text-org20f2cd1">
+<div id="outline-container-org5af63da" class="outline-3">
+<h3 id="org5af63da">The worst case.</h3>
+<div class="outline-text-3" id="text-org5af63da">
 <p>
 Imagine that the atomic operation <code>s1.[!idx]</code> (or <code>s2.[!idx]</code>) spend 1 second
 (like 1 <i>CPU tick</i>). So, for each iteration into our loop, we will spend 2
@@ -131,9 +131,9 @@ are close to be equal to the password stored into our database.
 </div>
 </div>
 
-<div id="outline-container-org4a2a402" class="outline-3">
-<h3 id="org4a2a402">A smart brute-force attack.</h3>
-<div class="outline-text-3" id="text-org4a2a402">
+<div id="outline-container-orgaac10ac" class="outline-3">
+<h3 id="orgaac10ac">A smart brute-force attack.</h3>
+<div class="outline-text-3" id="text-orgaac10ac">
 <p>
 So now we can imagine a tool which will try all possibilities. It will record
 times spent for each random inputs. Then, when it appears that from an input
@@ -171,9 +171,9 @@ be able to replicate the result. This tool does not work all the time!
 </div>
 </div>
 
-<div id="outline-container-orgbcb0c7a" class="outline-2">
-<h2 id="orgbcb0c7a">Too deep to be dangerous?</h2>
-<div class="outline-text-2" id="text-orgbcb0c7a">
+<div id="outline-container-orgcca4f7d" class="outline-2">
+<h2 id="orgcca4f7d">Too deep to be dangerous?</h2>
+<div class="outline-text-2" id="text-orgcca4f7d">
 <p>
 Of course, into the real world, our <code>equal</code> function is much much much more fast
 than some seconds. However, even if it can be hard to track how long <code>equal</code>
@@ -189,9 +189,9 @@ call of the same <code>equal</code> function but with different inputs.
 </p>
 </div>
 
-<div id="outline-container-orgd0f65c9" class="outline-3">
-<h3 id="orgd0f65c9">Eq(af) does the test for you</h3>
-<div class="outline-text-3" id="text-orgd0f65c9">
+<div id="outline-container-orgdfb586a" class="outline-3">
+<h3 id="orgdfb586a">Eq(af) does the test for you</h3>
+<div class="outline-text-3" id="text-orgdfb586a">
 <p>
 So, our distribution comes with a little benchmark tool which wants to see how
 long <code>equal</code> spend when we give to it 2 different values and 2 equal values.
@@ -210,7 +210,7 @@ whatever inputs.</li>
 </ul>
 
 
-<figure id="org2fd85e4">
+<figure id="orgc111eeb">
 <img src="static/eqaf_01.png" alt="eqaf_01.png">
 
 <figcaption><span class="figure-number">Figure 1: </span>A good curve</figcaption>
@@ -221,7 +221,7 @@ whatever inputs.</li>
 </ul>
 
 
-<figure id="org222f410">
+<figure id="org0144f22">
 <img src="static/eqaf_02.png" alt="eqaf_02.png">
 
 <figcaption><span class="figure-number">Figure 2: </span>A bad curve</figcaption>
@@ -246,9 +246,9 @@ time.
 </div>
 </div>
 
-<div id="outline-container-orgc5c8733" class="outline-2">
-<h2 id="orgc5c8733">How to fix it?</h2>
-<div class="outline-text-2" id="text-orgc5c8733">
+<div id="outline-container-org054f6ca" class="outline-2">
+<h2 id="org054f6ca">How to fix it?</h2>
+<div class="outline-text-2" id="text-org054f6ca">
 <p>
 The easiest way to avoid this side-channel attack is to spend exactly the same
 time for any inputs. At the end, even if we encounter different bytes, we will
@@ -260,16 +260,16 @@ continue to scan inputs.
   <span class="org-keyword">if</span> <span class="org-tuareg-font-lock-module">String.</span>length s1 <span class="org-tuareg-font-lock-operator">&lt;&gt;</span> <span class="org-tuareg-font-lock-module">String.</span>length s2 <span class="org-keyword">then</span> <span class="org-constant">false</span>
   <span class="org-keyword">else</span>
     <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span> <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">res</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-builtin">ref</span> <span class="org-constant">true</span> <span class="org-tuareg-font-lock-governing">in</span>
-      <span class="org-keyword">while</span> <span class="org-tuareg-font-lock-operator">!</span>idx <span class="org-tuareg-font-lock-operator">&lt;</span> <span class="org-tuareg-font-lock-module">String.</span>length s1
-      <span class="org-keyword">do</span> res <span class="org-tuareg-font-lock-operator">:=</span> s1.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span><span class="org-tuareg-font-lock-operator">!</span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">=</span> s2.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span><span class="org-tuareg-font-lock-operator">!</span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">&amp;&amp;</span> <span class="org-tuareg-font-lock-operator">!</span>res <span class="org-keyword">done</span> <span class="org-tuareg-font-lock-operator">;</span>
+      <span class="org-keyword">for</span> idx <span class="org-tuareg-font-lock-operator">=</span> <span class="org-highlight-numbers-number">0</span> <span class="org-keyword">to</span> <span class="org-tuareg-font-lock-module">String.</span>length s1 <span class="org-tuareg-font-lock-operator">-</span> <span class="org-highlight-numbers-number">1</span>
+      <span class="org-keyword">do</span> res <span class="org-tuareg-font-lock-operator">:=</span> s1.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">=</span> s2.<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span>idx<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span> <span class="org-tuareg-font-lock-operator">&amp;&amp;</span> <span class="org-tuareg-font-lock-operator">!</span>res <span class="org-keyword">done</span> <span class="org-tuareg-font-lock-operator">;</span>
       <span class="org-tuareg-font-lock-operator">!</span>res <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
 </pre>
 </div>
 </div>
 
-<div id="outline-container-org10027f7" class="outline-3">
-<h3 id="org10027f7">Into the OCaml side!</h3>
-<div class="outline-text-3" id="text-org10027f7">
+<div id="outline-container-orge5d8d1f" class="outline-3">
+<h3 id="orge5d8d1f">Into the OCaml side!</h3>
+<div class="outline-text-3" id="text-orge5d8d1f">
 <p>
 However, into the OCaml world, the deal can be much more complex that what we
 can imagine. Even if it's <i>easy</i> to translate an OCaml code to an assembly code,
@@ -295,9 +295,9 @@ regardless inputs - and only from that we can say that our function is
 </div>
 </div>
 
-<div id="outline-container-orgdcf7271" class="outline-2">
-<h2 id="orgdcf7271">Conclusion</h2>
-<div class="outline-text-2" id="text-orgdcf7271">
+<div id="outline-container-org39abc2d" class="outline-2">
+<h2 id="org39abc2d">Conclusion</h2>
+<div class="outline-text-2" id="text-org39abc2d">
 <p>
 Eq(af) provides a quite easy function and anybody can re-implement it. But it
 comes with tools which want to check our assumption, the time spent can not leak

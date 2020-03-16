@@ -168,8 +168,8 @@ let equal s1 s2 =
   if String.length s1 <> String.length s2 then false
   else
     ( let res = ref true in
-      while !idx < String.length s1
-      do res := s1.[!idx] = s2.[!idx] && !res done ;
+      for idx = 0 to String.length s1 - 1
+      do res := s1.[idx] = s2.[idx] && !res done ;
       !res )
 #+END_SRC
 
