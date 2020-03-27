@@ -1,4 +1,5 @@
 FROM ocaml/opam2:4.09
+RUN sudo apt-get update
 RUN sudo apt-get install -y m4 git net-tools iproute2 libev-dev qemu-kvm
 RUN opam update -y
 RUN opam install -y conf-libev mirage
