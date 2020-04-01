@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="alternate"
+      type="application/rss+xml"
+      href="https://blog.x25519.net/rss.xml"
+      title="RSS feed for https://blog.x25519.net/"/>
+<title>Release cycle about SMTP stack</title>
+<meta  name="author" content="dinosaure" />
+<link href= "static/style.css" rel="stylesheet" type="text/css" />
+<meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8" />
+<meta name="viewport" content="initial-scale=1,width=device-width,minimum-scale=1"></head>
+<body>
+<div id="preamble" class="status">
+<div class="header">
+  <a href="https://blog.x25519.net">dinosaure's Blog</a>
+</div></div>
+<div id="content">
+<div class="headline"> <h1 class="post-title"><a href="2020-03-31--release-cycle-email.html">Release cycle about SMTP stack</a></h1>
+</div><div class="post-date"><2020-03-31></div><p>
+If you follow a bit my work, you should know about a huge work started few
+months (years?!) ago about the SMTP stack. As a MirageOS developer, I mostly
+want to use it to replace some usual services such as a DNS resolver, a blog or
+a <a href="https://hannes.nqsb.io/Posts/DnsServer">primary DNS service</a>.
+</p>
+
+<p>
+But I really would like to replace an old but widely used service, the email
+service.
+</p>
+
+<div id="outline-container-orge5750a8" class="outline-2">
+<h2 id="orge5750a8">Mr. MIME at the beginning</h2>
+<div class="outline-text-2" id="text-orge5750a8">
+<p>
+One of my biggest project is <a href="https://github.com/mirage/mrmime">mrmime</a>. It's a <i>little</i> library to parse and
+generate an email according several RFCs. The most difficult part was to handle
+<i>encoding</i> and <i>multipart</i>.
+</p>
+
+<p>
+This library wants to solve 2 simple problems:
+</p>
+<ul class="org-ul">
+<li>How to read/introspect an email</li>
+<li>How to generate an email with OCaml</li>
+</ul>
+</div>
+
+<div id="outline-container-org614610e" class="outline-3">
+<h3 id="org614610e">How to read everything!</h3>
+<div class="outline-text-3" id="text-org614610e">
+<p>
+An email is easily understandable by a human as a <i>rich document</i> but it can be
+hard to extract useful information from it by a computer. Indeed, an email can
+be really complex such as a <a href="https://tools.ietf.org/html/rfc822">RFC822</a>'s date or, more obviously who should receive
+the email.
+</p>
+
+<p>
+Mr. MIME wants to solve this first problem and it provides an <a href="https://github.com/inhabitedtype/angstrom">angstrom</a> parser to
+extract <i>metadata</i> and represent them by OCaml values. Then, the user is able to
+introspect them and implement something like a <i>filter</i>, an organizer, etc.
+</p>
+</div>
+
+<div id="outline-container-org5b7dc87" class="outline-4">
+<h4 id="org5b7dc87">FWS and <code>unstrctrd</code></h4>
+<div class="outline-text-4" id="text-org5b7dc87">
+<p>
+The main problem about email is the <i>folding-whitespace</i>. It permits the user to
+extend a value of a field to multiple lines such as:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-mail"><span class="org-function-name">To:</span> A Group(Some people)
+   :Chris Jones &lt;c@(Chris's host.)public.example&gt;,
+     joe@example.org,
+ John <a href="mailto:jdoe%40one.test">&lt;jdoe@one.test&gt;</a> (my dear friend); (the end of the group)"
+</pre>
+</div>
+
+<p>
+As long as the next line starts with a <i>whitespace</i>, it's a part of the current
+value. At the first time, I tried to <i>parse</i> it with <code>ocamllex</code> but I failed
+when I got a <code>too big automaton</code> error. Then, I switched to <code>angstrom</code> but I was
+not really happy with results.
+</p>
+
+<p>
+Recently, with @let-def, we agreed that an <code>ocamllex</code> still is possible. At the
+end, we should be more faster than <code>angstrom</code>. So we did <a href="https://github.com/mirage/unstrctrd">unstrctrd</a>. The project
+is a bit more general than emails. In fact, some formats such as some used by
+Debian or HTTP/1.1 headers follow the same rule. <code>unstrctrd</code> wants to <i>flat</i>
+this kind of value.
+</p>
+
+<p>
+Into details, <code>unstrctrd</code> is a nice mix between <code>ocamllex</code> and <code>angstrom</code>.
+</p>
+
+<p>
+With this project, we handle <code>FWS</code> described by RFC5322 and obsolete form
+described by RFC822. It does some post-processes (like it removes useless
+comments as described by <code>CFWS</code>) and provides a well abstracted API to be able
+to parse and construct an <code>unstructured</code> form.
+</p>
+
+<p>
+To understand the babel tower, any values available into your email as the date,
+email addresses or subject of your email should respect, at least, the
+<code>unstructured</code> form. Any of them will be processed, at least, by <code>unstrctrd</code>.
+</p>
+
+<p>
+The goal is to hide such complexity to an other lower layer. In fact, before
+this library, 2 of mine libraries want to solve this problem:
+</p>
+<ul class="org-ul">
+<li><a href="https://github.com/dinosaure/emile">emile</a> to parse email addresses</li>
+<li>and of course, <code>mrmime</code></li>
+</ul>
+
+<p>
+To be able to provide as much as possible light libraries, we did <code>unstrctrd</code>
+and delete <code>FWS</code> handler from <code>emile</code>. By that, <code>mrmime</code> depends on both to
+properly parse email addresses.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orge0d1bd2" class="outline-4">
+<h4 id="orge0d1bd2">An email address and <code>emile</code></h4>
+<div class="outline-text-4" id="text-orge0d1bd2">
+<p>
+As you know, we use widely email addresses but the format of them is really
+<b><b>complex</b></b>. We can put more than one domain on it for example (like
+<code>&lt;@gmail.com:romain.calascibetta@x25519.net&gt;</code>), put a name (which must respect a
+special format), use special characters such as <code>+</code> or spaces with
+<i>quoted-string</i>. A domain can directly be an IPv4 or IPv6 or an <i>extensible</i>
+domain locally specified by the SMTP server. You can use UTF-8 of course since
+<a href="https://tools.ietf.org/html/rfc6532">RFC6532</a>.
+</p>
+
+<p>
+In other words, email addresses are <a href="https://github.com/dinosaure/emile/blob/master/test/test.ml">hard</a> to parse.
+</p>
+
+<p>
+With <code>unstrctrd</code>, we simplify a bit the library and <code>emile</code> does not handle
+anymore <code>FWS</code>. The goal is to let the user to process the input with <code>unstrctrd</code>
+at first if the input comes from an email and then try to parse the result with
+<code>emile</code> to extract the email address - and this is what <code>mrmime</code> does of course.
+</p>
+
+<p>
+And, of course, usual user does not care about <i>folding-whitespace</i>. The input
+comes usually from a form (so, without this such token), so <code>emile</code> wants to
+provide the most easy (and correct) way to parse an email address.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgfb2865b" class="outline-4">
+<h4 id="orgfb2865b">UTF-8, UTF-7, latin1 or <a href="https://en.wikipedia.org/wiki/YUSCII">YUSCII</a>?</h4>
+<div class="outline-text-4" id="text-orgfb2865b">
+<p>
+An other obvious problem about email is the <i>encoding</i> used. We talk sometimes
+about <i>charset</i> but let keep <i>encoding</i>. Of course, we have several <i>encoding</i>
+such as ISO-8859. With a nice discussion with @dbuenzli with beers, the most
+interesting way to solve the problem about <i>encoding</i> is to arbitrary choose one
+and keep it as long as we can.
+</p>
+
+<p>
+So, as the <a href="https://github.com/dbuenzli/uutf">uutf</a> author, we chosen UTF-8 of course!
+</p>
+
+<p>
+However, we need to provide a way to <i>normalize</i> any <i>encodings</i> to UTF-8. The
+Unicode consortium provides some <a href="ftp://ftp.unicode.org/Public/MAPPINGS/">translation tables</a> and I picked them to be able
+to translate some of them to UTF-8. Few projects was made in this goal:
+</p>
+<ul class="org-ul">
+<li><a href="https://github.com/mirage/uuuu">uuuu</a> to handle ISO-8859 encoding</li>
+<li><a href="https://github.com/mirage/coin">coin</a> to handle KOI8 encoding</li>
+<li>and the most important, <a href="https://github.com/mirage/yuscii">yuscii</a> to handle <a href="https://crawshaw.io/blog/utf7">the famous UTF-7 encoding</a></li>
+</ul>
+
+<p>
+All of them are merged into an other library: <a href="https://github.com/mirage/rosetta">rosetta</a>.
+</p>
+
+<p>
+This library is used by <code>mrmime</code> to try to <i>normalize</i> any contents to UTF-8. From
+the point of view of the user, he does not need to know all details. The result
+is just to say: any contents provided by <code>mrmime</code> use UTF-8!
+</p>
+
+<p>
+An other OCaml project to handle such things exists: <a href="https://github.com/yoriyuki/Camomile">Camomile</a>. But <code>rosetta</code>
+wants to be the most easier and simpler as we want.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org03b2c1a" class="outline-4">
+<h4 id="org03b2c1a">Base64 &amp; Quoted-Printable</h4>
+<div class="outline-text-4" id="text-org03b2c1a">
+<p>
+<code>mrmime</code> still wants to be low-level. Even if it wants to extract contents, it
+does not handle <i>format</i> of contents (this feature should be done by a new other
+project <a href="https://github.com/dinosaure/conan/">conan</a> - but we will talk about it in another article).
+</p>
+
+<p>
+However, <a href="https://tools.ietf.org/html/rfc2045">RFC2045</a> defines some <i>standalone</i> formats independently to the type of
+the content. The most know is the <a href="https://github.com/mirage/ocaml-base64">base64</a> to encode binary or large files into
+your email. It's when I discovered that email has his own base64 <i>format</i> that I
+decided to deeply <a href="https://tarides.com/blog/2019-02-08-release-of-base64">update</a> the package. decoder of this <i>special</i> format.
+</p>
+
+<p>
+In other side, RFC2045 describes an other <i>format</i>: the quoted-printable format.
+At this time, it was not possible to safely send an UTF-8 email. We still were
+constrained to encode each byte of our email into <a href="https://en.wikipedia.org/wiki/8-bit_clean">7-bits</a>. To ensure to be able
+to pass 8-bits values, the quoted-printable was done to encode such byte into a
+special form.
+</p>
+
+<p>
+From that, we did the library <a href="https://github.com/mirage/pecu">pecu</a> which is able to encode and decode such
+contents. This library was well tested with <a href="https://github.com/mirage/pecu/blob/master/fuzz/iso.ml"><i>fuzzer</i></a> as we do usually to check
+<i>isomorphism</i> between encoder and decoder.
+</p>
+
+<p>
+Some others formats exist and are created specially for emails such as the
+<a href="https://tools.ietf.org/html/rfc2646"><i>flowed</i> format</a> but they should be handle by others libraries.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org49b6f34" class="outline-3">
+<h3 id="org49b6f34">How to generate everything</h3>
+<div class="outline-text-3" id="text-org49b6f34">
+<p>
+The major feature about <code>mrmime</code> is not really about all of these libraries used
+to parse an email. Indeed, <code>mrmime</code> was able to introspect emails at the
+beginning (from that, we can look into <a href="https://www.youtube.com/watch?v=kQkRsNEo25k">an old conference</a> about it). The notable
+update is the <i>safe</i> way to emit an email.
+</p>
+
+<p>
+Indeed, a large work was done about API to be able to properly emit an email and
+try to respect as much as we can rules such as:
+</p>
+<ul class="org-ul">
+<li><i>folding-whitespace</i></li>
+<li>80-columns rule</li>
+<li><code>base64</code> and quoted-printable encoding</li>
+<li><i>multipart</i></li>
+</ul>
+
+<p>
+From that, I think we provide a nice interface to construct and emit an email.
+Generation of email address for example is pretty-close to what we expect:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">me</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Local.</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">[</span></span> w <span class="org-string">"romain"</span><span class="org-tuareg-font-lock-operator">;</span> w <span class="org-string">"calascibetta"</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">]</span></span> <span class="org-tuareg-font-lock-operator">@</span> <span class="org-tuareg-font-lock-module">Domain.</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>domain<span class="org-tuareg-font-lock-operator">,</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">[</span></span> a <span class="org-string">"x25519"</span><span class="org-tuareg-font-lock-operator">;</span> a <span class="org-string">"net"</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">]</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-double-colon">;;</span>
+</pre>
+</div>
+
+<p>
+Composition with <i>parts</i> is also nice:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">content_type_alternative</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-governing">open </span><span class="org-tuareg-font-lock-module">Content_type</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>with_type <span class="org-tuareg-font-lock-constructor">`Multipart</span> <span class="org-tuareg-font-lock-operator">&lt;.&gt;</span> with_subtype <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-tuareg-font-lock-constructor">`Iana</span> <span class="org-string">"alternative"</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> default
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">header</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-module">Header.</span>empty
+  <span class="org-tuareg-font-lock-operator">|&gt;</span> <span class="org-tuareg-font-lock-module">Header.</span>add <span class="org-tuareg-font-lock-module">Field_name.</span>content_type <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Field.</span><span class="org-tuareg-font-lock-constructor">Content</span><span class="org-tuareg-font-lock-operator">,</span> content_type_alternative<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">part0</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Mt.</span>part <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>stream_of_string <span class="org-string">"Hello World!"</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">part1</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Mt.</span>part <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>stream_of_string <span class="org-string">"Salut le monde!"</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">m0</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Mt.</span>multipart <span class="org-tuareg-font-lock-operator">~</span>header <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">[</span></span> part0<span class="org-tuareg-font-lock-operator">;</span> part1<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">]</span></span> <span class="org-tuareg-font-lock-operator">|&gt;</span> <span class="org-tuareg-font-lock-module">Mt.</span>multipart_as_part
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">m1</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Mt.</span>part stream_of_file
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">m</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Mt.</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>make multi <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>multipart <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">[</span></span> m0<span class="org-tuareg-font-lock-operator">;</span> m1<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">]</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+
+<p>
+Then, <code>mrmime</code> handles 80 columns such as when it reaches the limit, it tries to
+break with a <code>FWS</code> token the value where is permitted such as:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-mail"><span class="org-function-name">To:</span> thomas@gazagnaire.org, anil@recoil.org, hannes@mehnert.org, gemma.t.gordon@gmail.com
+</pre>
+</div>
+
+<p>
+becomes:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-mail"><span class="org-function-name">To:</span> thomas@gazagnaire.org, anil@recoil.org, hannes@mehnert.org,
+  gemma.t.gordon@gmail.com
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org7a1bd0b" class="outline-2">
+<h2 id="org7a1bd0b">SMTP then!</h2>
+<div class="outline-text-2" id="text-org7a1bd0b">
+<p>
+Of course, even if some people are really interested by <code>mrmime</code> mostly to pave
+a way to be able to create yet another email client (in OCaml!), my goal is a
+bit offbeat. So I mostly focused on the implementation of a SMTP server.
+</p>
+
+<p>
+The first notable library is <a href="https://github.com/mirage/colombe.git">colombe</a> - a low-level implementation of the SMTP
+protocol.
+</p>
+</div>
+
+<div id="outline-container-orge1a46fe" class="outline-3">
+<h3 id="orge1a46fe">How to describe a state machine?!</h3>
+<div class="outline-text-3" id="text-orge1a46fe">
+<p>
+The real goal of <code>colombe</code> is to provide an API which is able to let the user to
+describe a state machine to communicate to a peer. By this fact, <code>colombe</code> does
+not want to implement the <code>sendmail</code> command or does not want to implement a
+SMTP relay or a SMTP submission service.
+</p>
+
+<p>
+It is the first stone to be able to easily create such programs/libraries.
+</p>
+
+<p>
+So most of people should not care about <code>colombe</code> - as they mostly want to send
+an email. However, as a client such as <code>sendmail</code> or as a server such as an SMTP
+submission service, they should use the same ground and avoid a duplicate an
+implementation of how to talk SMTP with a peer.
+</p>
+
+<p>
+Another point is the possibility to use <code>colombe</code> with MirageOS - and make an
+unikernel with it. From that, we started to use an other kind of abstraction of
+I/O (such as <a href="https://github.com/ocsigen/lwt">LWT</a> or <a href="https://github.com/janestreet/async">ASYNC</a> - or <code>Unix</code>) which uses less <i>functor</i> as we do
+usually with MirageOS.
+</p>
+
+<p>
+But the real good point of <code>colombe</code> is the ability to describe the state
+machine with <i>monad</i> which provides high-level <code>recv</code> and <code>send</code> operations:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">properly_quit_and_fail</span><span class="org-variable-name"> ctx err</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span><span class="org-tuareg-font-lock-operator">*</span> _txts <span class="org-tuareg-font-lock-operator">=</span> send ctx <span class="org-tuareg-font-lock-constructor">QUIT</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-operator">&gt;&gt;=</span> <span class="org-keyword">fun</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> recv ctx <span class="org-tuareg-font-lock-constructor">PP_221</span> <span class="org-tuareg-font-lock-governing">in</span>
+  fail err
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">authentication</span><span class="org-variable-name"> ctx username password</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span><span class="org-tuareg-font-lock-operator">*</span> code<span class="org-tuareg-font-lock-operator">,</span> txts <span class="org-tuareg-font-lock-operator">=</span> send ctx <span class="org-tuareg-font-lock-constructor">AUTH</span> <span class="org-tuareg-font-lock-constructor">PLAIN</span> <span class="org-tuareg-font-lock-operator">&gt;&gt;=</span> <span class="org-keyword">fun</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> recv ctx <span class="org-tuareg-font-lock-constructor">CODE</span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-keyword">match</span> code <span class="org-keyword">with</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-highlight-numbers-number">504</span> <span class="org-tuareg-font-lock-operator">-&gt;</span> properly_quit_and_fail ctx <span class="org-tuareg-font-lock-constructor">`Unsupported_mechanism</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-highlight-numbers-number">538</span> <span class="org-tuareg-font-lock-operator">-&gt;</span> properly_quit_and_fail ctx <span class="org-tuareg-font-lock-constructor">`Encryption_required</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-highlight-numbers-number">534</span> <span class="org-tuareg-font-lock-operator">-&gt;</span> properly_quit_and_fail ctx <span class="org-tuareg-font-lock-constructor">`Weak_mechanism</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-highlight-numbers-number">334</span> <span class="org-tuareg-font-lock-operator">-&gt;</span>
+    <span class="org-tuareg-font-lock-governing">let</span><span class="org-tuareg-font-lock-operator">*</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-keyword">match</span> txts <span class="org-keyword">with</span>
+      <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">[]</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span>
+        <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">payload</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Base64.</span>encode_exn <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Fmt.</span>strf <span class="org-string">"\000%s\000%s"</span> username password<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-governing">in</span>
+        send ctx <span class="org-tuareg-font-lock-constructor">PAYLOAD</span> payload
+      <span class="org-tuareg-font-lock-operator">|</span> x <span class="org-tuareg-font-lock-operator">::</span> _ <span class="org-tuareg-font-lock-operator">-&gt;</span>
+        <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">x</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Base64.</span>decode_exn x <span class="org-tuareg-font-lock-governing">in</span>
+        <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">payload</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Base64.</span>encode_exn <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-module">Fmt.</span>strf <span class="org-string">"%s\000%s\000%s"</span> x username password<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> <span class="org-tuareg-font-lock-governing">in</span>
+        send ctx <span class="org-tuareg-font-lock-constructor">PAYLOAD</span> payload <span class="org-tuareg-font-lock-governing">in</span>
+    <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span> recv ctx <span class="org-tuareg-font-lock-constructor">CODE</span> <span class="org-tuareg-font-lock-operator">&gt;&gt;=</span> <span class="org-keyword">function</span>
+        <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-highlight-numbers-number">235</span><span class="org-tuareg-font-lock-operator">,</span> _txts<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> return <span class="org-tuareg-font-lock-constructor">`Authenticated</span>
+        <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-highlight-numbers-number">501</span><span class="org-tuareg-font-lock-operator">,</span> _txts<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> properly_quit_and_fail ctx <span class="org-tuareg-font-lock-constructor">`Authentication_rejected</span>
+        <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-highlight-numbers-number">535</span><span class="org-tuareg-font-lock-operator">,</span> _txts<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> properly_quit_and_fail ctx <span class="org-tuareg-font-lock-constructor">`Authentication_failed</span>
+        <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>code<span class="org-tuareg-font-lock-operator">,</span> txts<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span> fail <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span><span class="org-tuareg-font-lock-constructor">`Unexpected_response</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">(</span></span>code<span class="org-tuareg-font-lock-operator">,</span> txts<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-3">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+  <span class="org-tuareg-font-lock-operator">|</span> code <span class="org-tuareg-font-lock-operator">-&gt;</span> fail <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-tuareg-font-lock-constructor">`Unexpected_response</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>code<span class="org-tuareg-font-lock-operator">,</span> txts<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+</pre>
+</div>
+
+<p>
+As you can see, we use <a href="https://jobjo.github.io/2019/04/24/ocaml-has-some-new-shiny-syntax.html">monadic operators</a> to simplify the lecture of the code.
+<code>send</code> and <code>recv</code> take values described by the user with a GADT:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">'x send</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">QUIT</span> <span class="org-tuareg-font-lock-operator">:</span> unit send
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">AUTH</span> <span class="org-tuareg-font-lock-operator">:</span> auth send
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">PAYLOAD</span> <span class="org-tuareg-font-lock-operator">:</span> string send
+
+<span class="org-tuareg-font-lock-governing">type</span> <span class="org-type">'x recv</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">PP_220</span> <span class="org-tuareg-font-lock-operator">:</span> string list recv
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">PP_221</span> <span class="org-tuareg-font-lock-operator">:</span> string list recv
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">CODE</span> <span class="org-tuareg-font-lock-operator">:</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>int <span class="org-tuareg-font-lock-operator">*</span> string list<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span> recv
+</pre>
+</div>
+
+<p>
+Then, the user just needs to describe how to process such commands with a given <code>ctx</code>:
+</p>
+<ul class="org-ul">
+<li>how to <i>send</i> <code>'x recv</code> to the <code>ctx</code></li>
+<li>how to <i>recv</i> <code>'x send</code> from the <code>ctx</code></li>
+</ul>
+
+<p>
+Of course, this where <code>colombe</code> comes. It already defines few <i>primitives</i> to
+emit and parse such commands into the <code>ctx</code>.
+</p>
+
+<p>
+At another layer (which needs <i>syscalls</i>), a composition between the <code>ctx</code> and a
+<code>fiber</code> (like <code>authentication</code>) returns a process <code>t</code> such as:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-ocaml"><span class="org-tuareg-font-lock-governing">type</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span><span class="org-type">'a</span><span class="org-tuareg-font-lock-operator">,</span><span class="org-type"> 'err</span><span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span><span class="org-type"> t</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Read</span>   <span class="org-keyword">of</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> buffer <span class="org-tuareg-font-lock-operator">:</span> bytes
+              <span class="org-tuareg-font-lock-operator">;</span> off <span class="org-tuareg-font-lock-operator">:</span> int
+              <span class="org-tuareg-font-lock-operator">;</span> len <span class="org-tuareg-font-lock-operator">:</span> int
+              <span class="org-tuareg-font-lock-operator">;</span> k <span class="org-tuareg-font-lock-operator">:</span> int <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>'a<span class="org-tuareg-font-lock-operator">,</span> 'err<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> t <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Write</span>  <span class="org-keyword">of</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> buffer <span class="org-tuareg-font-lock-operator">:</span> string
+              <span class="org-tuareg-font-lock-operator">;</span> off <span class="org-tuareg-font-lock-operator">:</span> int
+              <span class="org-tuareg-font-lock-operator">;</span> len <span class="org-tuareg-font-lock-operator">:</span> int
+              <span class="org-tuareg-font-lock-operator">;</span> k <span class="org-tuareg-font-lock-operator">:</span> int <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">(</span></span>'a<span class="org-tuareg-font-lock-operator">,</span> 'err<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-2">)</span></span> t <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span>
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Return</span> <span class="org-keyword">of</span> 'a
+  <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Fail</span>   <span class="org-keyword">of</span> 'err
+
+<span class="org-tuareg-font-lock-governing">let</span> <span class="org-function-name">run</span><span class="org-variable-name"> socket username password</span> <span class="org-tuareg-font-lock-operator">=</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">ctx</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Context.</span>create <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">()</span></span> <span class="org-tuareg-font-lock-governing">in</span>
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">fiber</span> <span class="org-tuareg-font-lock-operator">=</span> authentication ctx username password <span class="org-tuareg-font-lock-governing">in</span>
+
+  <span class="org-tuareg-font-lock-governing">let</span> <span class="org-tuareg-font-lock-governing">rec</span> <span class="org-function-name">go</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-keyword">function</span>
+    <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Read</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> buffer<span class="org-tuareg-font-lock-operator">;</span> off<span class="org-tuareg-font-lock-operator">;</span> len<span class="org-tuareg-font-lock-operator">;</span> k<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span>
+      <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">len</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>read socket buffer off len <span class="org-tuareg-font-lock-governing">in</span>
+      go <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>k len<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+    <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Write</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">{</span></span> buffer<span class="org-tuareg-font-lock-operator">;</span> off<span class="org-tuareg-font-lock-operator">;</span> len<span class="org-tuareg-font-lock-operator">;</span> k<span class="org-tuareg-font-lock-operator">;</span> <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">}</span></span> <span class="org-tuareg-font-lock-operator">-&gt;</span>
+      <span class="org-tuareg-font-lock-governing">let</span> <span class="org-variable-name">len</span> <span class="org-tuareg-font-lock-operator">=</span> <span class="org-tuareg-font-lock-module">Unix.</span>write socket buffer off len <span class="org-tuareg-font-lock-governing">in</span>
+      go <span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">(</span></span>k len<span class="org-tuareg-font-lock-operator"><span class="org-rainbow-delimiters-depth-1">)</span></span>
+    <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Return</span> v <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-constructor">Ok</span> v
+    <span class="org-tuareg-font-lock-operator">|</span> <span class="org-tuareg-font-lock-constructor">Fail</span> err <span class="org-tuareg-font-lock-operator">-&gt;</span> <span class="org-tuareg-font-lock-constructor">Error</span> err <span class="org-tuareg-font-lock-governing">in</span>
+  go m
+</pre>
+</div>
+
+<p>
+And you have a fully implemented and available way on <code>Unix</code> to communication with a SMTP
+peer - and be authenticated.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org5acd35a" class="outline-3">
+<h3 id="org5acd35a">Implement <code>sendmail</code>, the client side</h3>
+<div class="outline-text-3" id="text-org5acd35a">
+<p>
+At least, from this core, it should be easy to implement <code>sendmail</code> command. And
+of course, the distribution of <code>colombe</code> provide such library:
+</p>
+<ul class="org-ul">
+<li><code>sendmail</code> which is free about lwt, async or unix</li>
+<li><code>sendmail.tls</code> which uses <code>STARTTLS</code></li>
+<li><code>sendmail-lwt</code> a specialisation of <code>sendmail</code> with lwt</li>
+</ul>
+
+<p>
+All of them wants to provide the most easy way to send an email. Indeed, it
+exists 2 ways to submit an email:
+</p>
+<ul class="org-ul">
+<li>over a TLS flow available on <code>*:465</code></li>
+<li>over a simple TCP flow but mostly of them require to start a TLS flow
+<i>in-the-fly</i> on <code>*:587</code> with <code>STARTTLS</code></li>
+</ul>
+</div>
+
+<div id="outline-container-org5066893" class="outline-4">
+<h4 id="org5066893"><code>facteur</code></h4>
+<div class="outline-text-4" id="text-org5066893">
+<p>
+From all of that, we developed a little <i>proof-of-concept</i> to see if <code>colombe</code>
+and <code>sendmail</code> correspond to what we expect: <a href="https://github.com/dinosaure/facteur/">facteur</a>.
+</p>
+
+<p>
+This is a simple tool which wants to send an email as the <code>sendmail</code> command but
+the complete stack is in OCaml! It's a merge of <code>mrmime</code> and <code>sendmail</code> to be
+able to produce a well formed email with file attachments.
+</p>
+
+<p>
+It still is an experimental software and it requires a bad dependency <a href="https://linux.die.net/man/5/magic">libmagic</a>
+to be able to recognise MIME type of file attachments. However, I started to
+implement something else, <a href="https://github.com/dinosaure/conan.git">conan</a>, to automatically do this job and be MirageOS
+compatible.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org73a4aa8" class="outline-3">
+<h3 id="org73a4aa8">Server side</h3>
+<div class="outline-text-3" id="text-org73a4aa8">
+<p>
+Finally, I started to implement the server side. <code>colombe</code> handles both side. It
+can parse response and emit request and <i>vice-versa</i>. From the same ground, we
+try to implement 2 servers into a single project: <a href="https://github.com/dinosaure/ptt">ptt</a>.
+</p>
+
+<p>
+It provides two libraries:
+</p>
+<ul class="org-ul">
+<li><code>lipap</code> which is an SMTP submission server</li>
+<li><code>mti-gf</code> which is an SMTP relay server</li>
+</ul>
+
+<p>
+The final goal of them is to provide a full stack to be able to create email
+addresses from a given domain. An example is may be more interesting, we will
+take my <code>x25519.net</code>.
+</p>
+
+<p>
+We will provide a first SMTP relay which will receive any incoming emails. It
+will be the server notified by my primary DNS server with the <code>MX</code> record.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-shell">$ dig +short MX x25519.net
+<span class="org-highlight-numbers-number">0</span> <span class="org-highlight-numbers-number">163.172.65.89</span>
+</pre>
+</div>
+
+<p>
+The goal of it is to transmit incoming email to the real destination. For
+example, you want to send me an email to <code>romain@x25519.net</code> from your
+<code>gmail.com</code> address. Google will speak with this server. Internally, I
+associated <code>romain@x25519.net</code> to <code>romain.calascibetta@gmail.com</code>. Finally,
+<code>mti-gf</code> will <i>retransmit</i> your email to Google (to
+<code>romain.calascibetta@gmail.com</code>).
+</p>
+
+<p>
+The second server let us to use our <code>x25519.net</code> email address to send email.
+The goal is to properly configure your <a href="https://fr.wikipedia.org/wiki/Mail_Transfer_Agent">MUA</a> to be able to be authenticated to our
+<code>lipap</code> server. Then, it is able to communicate to others SMTP servers such as
+Google and send your email to them (with your <code>x25519.net</code> address).
+</p>
+
+<p>
+So from my experiments, all should work and I started to deploy some others
+unikernels mostly to get automatically <a href="https://letsencrypt.org/">let's encrypt</a> certificates - and provide
+<code>163.172.65.89:587</code> and <code>163.172.65.89:465</code>.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgb03bf0a" class="outline-3">
+<h3 id="orgb03bf0a">Other projects</h3>
+<div class="outline-text-3" id="text-orgb03bf0a">
+<p>
+Along my way, I surely developed some others tools (which need an update with
+new interfaces or are really experimental) such as:
+</p>
+<ul class="org-ul">
+<li><a href="https://github.com/dinosaure/ocaml-dkim">ocaml-dkim</a> to verify DKIM fields from an email</li>
+<li><a href="https://github.com/mirage/colombe">received</a> to generate a graph from <code>Received:</code> fields from an email or generate
+one of them</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgd32830a" class="outline-2">
+<h2 id="orgd32830a">Conclusion</h2>
+<div class="outline-text-2" id="text-orgd32830a">
+<p>
+The stack is huge and it is not really finished. But I believe that I reached a
+point where all libraries compose nicely and let me to provide something much
+more complex such as an SMTP server!
+</p>
+
+<p>
+All of that is possible of course with the work from others peoples such as
+<a href="https://github.com/mirleft/ocaml-tls">ocaml-tls</a> or, more generally, MirageOS people.
+</p>
+
+<p>
+I believe that this year will be the year where such service will be exist as a
+MirageOS unikernel! And may be do an anarchist revolution and do a self
+re-appropriation of the means of production.
+</p>
+</div>
+</div>
+</div>
+<div id="postamble" class="status"><div id="archive">
+  <a href="archive.html">archive</a>
+</div></div>
+</body>
+</html>
