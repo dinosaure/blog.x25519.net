@@ -1,18 +1,24 @@
+let () = Printexc.record_backtrace true
+
 let invalid_arg fmt = Format.kasprintf invalid_arg fmt
 
 module Make
     (Console : Mirage_console.S)
+    (Random : Mirage_random.S)
+    (Mclock : Mirage_clock.MCLOCK)
+    (Pclock : Mirage_clock.PCLOCK)
     (Time : Mirage_time.S)
-    (StackV4 : Mirage_stack.V4)
-    (Certificate : Mirage_kv.RO)
-    (Resolver : Resolver_lwt.S)
-    (Conduit : Conduit_mirage.S) = struct
+    (StackV4 : Mirage_stack.V4) = struct
   module Key = Mirage_kv.Key
   module Paf = Paf.Make(Time)(StackV4)
   module TCP = Paf.TCP
-
+  module DNS = Conduit_mirage_dns.Make(Random)(Time)(Mclock)(StackV4)
+  module SSH = Awa_conduit.Make(Lwt)(Conduit_mirage)(Mclock)
+  module Certify = Dns_certify_mirage.Make(Random)(Pclock)(Time)(StackV4)
   module Store = Irmin_mirage_git.Mem.KV(Irmin.Contents.String)
   module Sync = Irmin.Sync(Store)
+
+  let ssh_protocol = SSH.protocol_with_ssh TCP.protocol
 
   open Lwt.Infix
   open Httpaf
@@ -25,10 +31,15 @@ module Make
 
   exception Conflict
 
-  let connect_store resolver conduit =
+  let git_edn edn =
+    match Smart_git.endpoint_of_string edn with
+    | Ok edn -> edn
+    | Error (`Msg err) -> Fmt.invalid_arg "Invalid Git endpoint (%s): %s." edn err
+
+  let connect_store ~resolvers =
     let config = Irmin_mem.config () in
     Store.Repo.v config >>= Store.master >|= fun repository ->
-    repository, Store.remote ~conduit ~resolver (Key_gen.remote ())
+    repository, Store.remote ~resolvers (Key_gen.remote ())
 
   let respond_404 key reqd =
     let contents = Fmt.strf "Resource %a not found." Fpath.pp key in
@@ -136,49 +147,87 @@ module Make
     | Ok x -> f x
     | Error err -> Lwt.return (Error err)
 
-  let null ~host:_ _ = Ok None
+  let exit_expired = 80
 
-  let start console time stack local resolver conduit =
-    connect_store resolver conduit >>= fun (store, remote) ->
-    let get_tls_configuration () =
-      Certificate.get local Key.(v (Key_gen.private_key ())) >>= fun private_key ->
-      Certificate.get local Key.(v (Key_gen.pem ())) >>= fun cert ->
-      match private_key, cert with
-      | Ok private_key, Ok cert ->
-        ( match X509.Private_key.decode_pem (Cstruct.of_string private_key),
-                X509.Certificate.decode_pem_multiple (Cstruct.of_string cert) with
-        | Ok (`RSA private_key), Ok certs -> Lwt.return (private_key, certs)
-        | Ok _, _ -> invalid_arg "Invalid PEM certificate %S" cert
-        | _, Ok _ -> invalid_arg "Invalid private key" )
-      | _, _ -> invalid_arg "The blog needs a certificate" in
-    get_tls_configuration () >>= fun (private_key, certs) ->
-    Sync.pull store remote `Set >>= function
+  let quit_before_expire = function
+    | `Single (server :: _, _) ->
+      let expiry = snd (X509.Certificate.validity server) in
+      let diff = Ptime.diff expiry (Ptime.v (Pclock.now_d_ps ())) in
+      ( match Ptime.Span.to_int_s diff with
+        | None -> invalid_arg "couldn't convert span to seconds"
+        | Some x when x < 0 -> invalid_arg "diff is negative"
+        | Some x ->
+          Lwt.async @@ fun () ->
+          Time.sleep_ns Int64.(sub (Duration.of_sec x) (Duration.of_day 1)) >|= fun () ->
+          exit exit_expired )
+    | _ -> ()
+
+  let tls stack hostname =
+    Certify.retrieve_certificate stack ~dns_key:(Key_gen.dns_key ())
+      ~hostname (Key_gen.dns_server ()) (Key_gen.dns_port ()) >>= function
+    | Error (`Msg err) -> Lwt.fail (Failure err)
+    | Ok certificates ->
+      quit_before_expire certificates ;
+      let conf = Tls.Config.server ~certificates () in
+      Lwt.return conf
+
+  let ssh_cfg edn =
+    match edn, Key_gen.ssh_seed (), Key_gen.ssh_auth () with
+    | { Smart_git.scheme= `SSH user; path; _ }, Some seed, Some auth ->
+      let authenticator = match Awa.Keys.authenticator_of_string auth with
+        | Ok v -> Some v
+        | Error err -> None in
+      let seed = Awa.Keys.of_seed seed in
+      let req = Awa.Ssh.Exec (Fmt.strf "git-upload-pack '%s'" path) in
+      Some { Awa_conduit.user; key= seed; req
+           ; authenticator }
+    | _ -> None
+
+  let start console random mclock pclock time stack =
+    let dns = DNS.create stack in
+    let ssh_cfg = ssh_cfg (git_edn (Key_gen.remote ())) in
+    let irmin_resolvers =
+      let tcp_resolve ~port = DNS.resolv stack ?nameserver:None dns ~port in
+      match ssh_cfg with
+      | Some ssh_cfg ->
+        let ssh_resolve domain_name =
+          tcp_resolve ~port:22 domain_name >>= function
+          | Some edn -> Lwt.return_some (edn, ssh_cfg)
+          | None -> Lwt.return_none in
+        Conduit_mirage.empty
+        |> Conduit_mirage.add
+            ~priority:10 ssh_protocol ssh_resolve
+        |> Conduit_mirage.add
+             TCP.protocol (tcp_resolve ~port:9418)
+      | None ->
+        Conduit_mirage.add
+          TCP.protocol (tcp_resolve ~port:9418)
+          Conduit_mirage.empty in
+    connect_store ~resolvers:irmin_resolvers >>= fun (store, remote) ->
+    (* tls stack Domain_name.(host_exn (of_string_exn (Key_gen.hostname ())))
+    >>= fun tls_config -> *)
+    Sync.pull store remote `Set >>= fun res ->
+    match res with
     | Error (`Msg err) -> failwith err
     | Error (`Conflict err) -> failwith err
     | Ok `Empty | Ok (`Head _) ->
       let tcp_config ~port =
-        { Tuyau_mirage_tcp.port= port
-        ; Tuyau_mirage_tcp.keepalive= None
-        ; Tuyau_mirage_tcp.nodelay= false
-        ; Tuyau_mirage_tcp.stack } in
-      let tls_config =
-        Tls.Config.server
-          ~certificates:(`Single (certs, private_key))
-          ~authenticator:null () in
+        { Conduit_mirage_tcp.port= port
+        ; Conduit_mirage_tcp.keepalive= None
+        ; Conduit_mirage_tcp.nodelay= false
+        ; Conduit_mirage_tcp.stack } in
       let request_handler = request_handler console remote store in
       let http_fiber () =
-        (Tuyau_mirage.serve
-           ~key:TCP.configuration
+        (Conduit_mirage.Service.init
            (tcp_config ~port:(Key_gen.http_port ()))
-           ~service:TCP.service >>? fun (master, _) ->
+           ~service:TCP.service >>? fun master ->
          Paf.http ~request_handler ~error_handler master) >>= fun _ ->
         Lwt.return () in
-      let https_fiber () =
-        (Tuyau_mirage.serve
-           ~key:Paf.tls_configuration
+      (* let https_fiber () =
+        (Conduit_mirage.Service.init
            (tcp_config ~port:(Key_gen.https_port ()), tls_config)
-           ~service:Paf.tls_service >>? fun (master, _) ->
+           ~service:Paf.tls_service >>? fun master ->
          Paf.https ~request_handler ~error_handler master) >>= fun _ ->
-        Lwt.return () in
-      Lwt.join [ http_fiber (); https_fiber () ]
+        Lwt.return () in *)
+      Lwt.join [ http_fiber (); (* https_fiber () *) ]
 end
