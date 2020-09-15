@@ -204,8 +204,8 @@ module Make
           TCP.protocol (tcp_resolve ~port:9418)
           Conduit_mirage.empty in
     connect_store ~resolvers:irmin_resolvers >>= fun (store, remote) ->
-    (* tls stack Domain_name.(host_exn (of_string_exn (Key_gen.hostname ())))
-    >>= fun tls_config -> *)
+    tls stack Domain_name.(host_exn (of_string_exn (Key_gen.hostname ())))
+    >>= fun tls_config ->
     Sync.pull store remote `Set >>= fun res ->
     match res with
     | Error (`Msg err) -> failwith err
@@ -223,11 +223,11 @@ module Make
            ~service:TCP.service >>? fun master ->
          Paf.http ~request_handler ~error_handler master) >>= fun _ ->
         Lwt.return () in
-      (* let https_fiber () =
+      let https_fiber () =
         (Conduit_mirage.Service.init
            (tcp_config ~port:(Key_gen.https_port ()), tls_config)
            ~service:Paf.tls_service >>? fun master ->
          Paf.https ~request_handler ~error_handler master) >>= fun _ ->
-        Lwt.return () in *)
-      Lwt.join [ http_fiber (); (* https_fiber () *) ]
+        Lwt.return () in
+      Lwt.join [ http_fiber (); https_fiber () ]
 end
